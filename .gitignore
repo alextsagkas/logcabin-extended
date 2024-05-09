@@ -10,3 +10,4 @@
 /smoketest*.conf
 /smoketeststorage
 /storage
+/.vscode
