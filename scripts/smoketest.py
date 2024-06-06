@@ -84,6 +84,7 @@ def main():
 
 
         print('Initializing first server\'s log')
+        print('--------------------------------')
         sandbox.rsh(smokehosts[0][0],
                     '%s --bootstrap --config smoketest-%d.conf' %
                     (server_command, server_ids[0]),
@@ -100,6 +101,7 @@ def main():
             sandbox.checkFailures()
 
         print('Growing cluster')
+        print('---------------')
         sh('build/Examples/Reconfigure %s %s set %s' %
            (cluster,
             reconf_opts,
