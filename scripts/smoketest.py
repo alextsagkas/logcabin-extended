@@ -34,12 +34,17 @@ Options:
 """
 
 from __future__ import print_function, division
-from common import sh, captureSh, Sandbox, smokehosts
+from common import sh, Sandbox, smokehosts
 from docopt import docopt
-import os
 import random
 import subprocess
 import time
+
+def run_command(command):
+    try:
+        subprocess.check_call(command, shell=True)
+    except subprocess.CalledProcessError as e:
+        print("Warning: Command failed:", e)
 
 def main():
     arguments = docopt(__doc__)
@@ -57,9 +62,12 @@ def main():
     alphabet = [chr(ord('a') + i) for i in range(26)]
     cluster_uuid = ''.join([random.choice(alphabet) for i in range(8)])
     with Sandbox() as sandbox:
-        sh('rm -rf smoketeststorage/')
-        sh('rm -f debug/*')
-        sh('mkdir -p debug')
+        run_command('rm -rf smoketeststorage/')
+        run_command('rm -f debug/*')
+        run_command('mkdir -p debug')
+        run_command('rm -rf "Storage/server"*"/"')
+        run_command('rm "smoketest-"*".conf"')
+        run_command('rm -rf "Server/server"*"/"')
 
         for server_id in server_ids:
             host = smokehosts[server_id - 1]
