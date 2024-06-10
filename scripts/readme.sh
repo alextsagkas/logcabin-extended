@@ -43,7 +43,25 @@ build/Examples/Reconfigure --cluster=$ALLSERVERS set 127.0.0.1:5254 127.0.0.1:52
 
 build/Examples/HelloWorld --cluster=$ALLSERVERS
 
-echo -n hello | build/Examples/TreeOps --cluster=$ALLSERVERS write /world
+# Alex Tsagkas Folder
+build/Examples/TreeOps --cluster=$ALLSERVERS mkdir /alextsagkas/
+
+echo "This is my first file." | \
+build/Examples/TreeOps --cluster=$ALLSERVERS --dir=/alextsagkas/ write file_1.txt
+echo "This is my second file." | \
+build/Examples/TreeOps --cluster=$ALLSERVERS --dir=/alextsagkas/ write file_2.txt
+
+# Angelor Motsios Folder
+build/Examples/TreeOps --cluster=$ALLSERVERS mkdir /angelos_motsios/
+
+echo "This is my 1st file." | \
+build/Examples/TreeOps --cluster=$ALLSERVERS --dir=/angelos_motsios/ write file_1.txt
+echo "This is my 2nd file." | \
+build/Examples/TreeOps --cluster=$ALLSERVERS --dir=/angelos_motsios/ write file_2.txt
+echo "This is my last word. I promise." | \
+build/Examples/TreeOps --cluster=$ALLSERVERS --dir=/angelos_motsios/ write file_2.txt
+
+# List all files in the root directory
 build/Examples/TreeOps --cluster=$ALLSERVERS dump
 
 kill $pid1
@@ -53,3 +71,4 @@ kill $pid3
 wait
 
 rm -r $tmpdir
+rm logcabin-1.conf logcabin-2.conf logcabin-3.conf
