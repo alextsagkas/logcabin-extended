@@ -2,3 +2,6 @@
 	path = gtest
 	# relative URL, usually goes to https://github.com/logcabin/gtest.git
 	url = git@github.com:logcabin/gtest.git
+[submodule "raft.tla"]
+	path = raft.tla
+	url = git@github.com:ongardie/raft.tla.git
