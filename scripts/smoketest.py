@@ -50,7 +50,7 @@ def main():
     arguments = docopt(__doc__)
     client_command = arguments['--client']
     server_command = arguments['--binary']
-    num_servers = int(arguments['--servers'])
+    num_servers = int(arguments['--servers']) if arguments['--servers'] else 3
     reconf_opts = arguments['--reconf']
     if reconf_opts == "''":
         reconf_opts = ""

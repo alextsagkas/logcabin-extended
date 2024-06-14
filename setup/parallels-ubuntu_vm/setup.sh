@@ -43,3 +43,6 @@ sudo apt-get install -y libcrypto++-dev libcrypto++-doc libcrypto++-utils
 
 # Doxygen
 sudo apt-get install -y doxygen
+
+# Valgrind
+sudo apt-get install -y valgrind

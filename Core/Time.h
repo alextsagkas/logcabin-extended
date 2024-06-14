@@ -244,7 +244,7 @@ rdtsc()
     return (__builtin_ppc_get_timebase());
 #elif defined(__aarch64__)
     uint64_t val;
-    asm volatile ("mrs %0, cntvct_el0" : "=r" (val));
+    asm volatile("mrs %0, cntvct_el0" : "=r" (val));
     return val;
 #else
 #error "Unsupported platform."
