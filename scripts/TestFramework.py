@@ -6,7 +6,7 @@ import random
 from localconfig import hosts
 from common import Sandbox, sh
 
-def run_command(command):
+def run_shell_command(command):
     try:
         subprocess.check_call(command, shell=True)
     except subprocess.CalledProcessError as e:
@@ -15,13 +15,11 @@ def run_command(command):
 class TestFramework(object):
     
     def __init__(self):
-        self.hosts = hosts
-        self.servers = [host for host, _, _ in self.hosts]
-        self.server_ids = [server_id for _, _, server_id in self.hosts]
+        self.server_ips = [host for host, _, _ in hosts]
+        self.server_ids = [server_id for _, _, server_id in hosts]
 
         alphabet = [chr(ord('a') + i) for i in range(26)]
         self.cluster_uuid = ''.join([random.choice(alphabet) for i in range(8)]) 
-        self.cluster = "--cluster=%s" % ','.join([host for host in self.servers])
 
         self.snapshotMinLogSize = 1024
 
@@ -31,21 +29,21 @@ class TestFramework(object):
         self.client_commands = 0
     
     def _print_attr(self):
-        print "hosts: ", self.hosts
-        print "servers: ", self.servers
+        print "server_ips: ", self.server_ips
         print "server_ids: ", self.server_ids
         print "cluster_uuid: ", self.cluster_uuid
         print "snapshotMinLogSize: ", self.snapshotMinLogSize
         print "filename: ", self.filename
         print "sandbox: ", self.sandbox
+        print "client_commands: ", self.client_commands
 
     def create_configs(self, filename="logcabin"):
         self.filename = filename
 
-        for server_id in self.server_ids:
+        for server_id, server_ip in zip(self.server_ids, self.server_ips):
             with open('%s-%d.conf' % (self.filename, server_id), 'w') as f:
                 f.write('serverId = %d\n' % server_id)
-                f.write('listenAddresses = %s\n' % self.hosts[server_id - 1][0])
+                f.write('listenAddresses = %s\n' % server_ip)
                 f.write('clusterUUID = %s\n' % self.cluster_uuid)
                 f.write('snapshotMinLogSize = %s' % self.snapshotMinLogSize)
                 f.write('\n\n')
@@ -55,36 +53,36 @@ class TestFramework(object):
                     pass
 
     def create_folders(self):
-        run_command('rm -rf debug/*')
-        run_command('mkdir -p debug')
+        run_shell_command('mkdir -p debug')
 
     def _initialize_first_server(self, server_command):
        print '\nInitializing first server\'s log'
        print '--------------------------------'
        
-       host = self.hosts[0]
+       server_ip = self.server_ips[0]
        command = ('%s --bootstrap --config %s-%d.conf' %
-                     (server_command, self.filename, self.server_ids[0]))
+                 (server_command, self.filename, self.server_ids[0]))
 
-       print('Executing: %s on %s' % (command, host[0]))
+       print('Executing: %s on %s' % (command, server_ip))
 
        self.sandbox.rsh(
-           host[0],
+           server_ip,
            command,
-           stderr=open('debug/bootstrap', 'w')
+           stderr=open('debug/bootstrap_server', 'w')
        ) 
     
     def _start_servers(self, server_command):
         print '\nStarting servers'
         print '----------------'
-        for server_id in self.server_ids:
-            host = self.hosts[server_id - 1]
+
+        for server_id, server_ip in zip(self.server_ids, self.server_ips):
             command = ('%s --config %s-%d.conf' %
                        (server_command, self.filename, server_id))
 
-            print('Executing: %s on %s' % (command, host[0]))
+            print('Executing: %s on %s' % (command, server_ip))
+
             self.sandbox.rsh(
-                host[0], 
+                server_ip, 
                 command, 
                 bg=True,
                 stderr=open('debug/server_%d' % server_id, 'w')
@@ -98,9 +96,9 @@ class TestFramework(object):
 
         sh('build/Examples/Reconfigure %s %s set %s' %
            (
-               self.cluster,
+               "--cluster=%s" % ','.join([server_ip for server_ip in self.server_ips]),
                reconf_opts,
-               ' '.join([server for server in self.servers])
+               ' '.join([server_ip for server_ip in self.server_ips])
             )
         )
     
@@ -113,33 +111,36 @@ class TestFramework(object):
             self.cleanup()
     
     def execute_client_command(self, client_command):
-        print '\nStarting %s %s on localhost' % (client_command, self.cluster)
+        cluster = "--cluster=%s" % ','.join([server_ip for server_ip in self.server_ips])
+
+        print '\nStarting %s %s on localhost' % (client_command, cluster)
         print '-' * 150
 
         try:
-            client = self.sandbox.rsh('localhost',
-                             '%s %s' % (client_command, self.cluster),
-                             stderr=open('debug/client_command_%d' % self.client_commands, 'w')
-                            )
+            client = self.sandbox.rsh(
+                'localhost',
+                '%s %s' % (client_command, cluster),
+                stderr=open('debug/client_command_%d' % self.client_commands, 'w')
+            )
 
             self.client_commands += 1
         except Exception as e:
-            print "Error: ", e
+            print "Clinet command error: ", e
             self.cleanup()
 
     def cleanup(self, debug=False):
         """Clean up the environment."""
 
         # Generated from TestFramework.create_config
-        run_command('rm "%s-"*".conf"' % self.filename)
+        run_shell_command('rm "%s-"*".conf"' % self.filename)
         if not debug:
-            run_command('rm -f debug/*')
+            run_shell_command('rm -f debug/*')
 
         # Generated from LogCabin
-        run_command('rm -rf "Storage/server"*"/"')
-        run_command('rm -rf "Server/server"*"/"')
+        run_shell_command('rm -rf "Storage/server"*"/"')
+        run_shell_command('rm -rf "Server/server"*"/"')
 
-        # Release sandbox resources
+        # Release Ssandbox resources
         self.sandbox.__exit__(None, None, None)
 
         
@@ -154,7 +155,7 @@ if __name__ == '__main__':
 
     test.execute_client_command("build/Examples/TreeOps mkdir /dir1")
     test.execute_client_command("build/Examples/TreeOps mkdir /dir2")
-    test.execute_client_command("build/Examples/TreeOps write /dir2/file1")
+    # test.execute_client_command("build/Examples/TreeOps write /dir2/file1")
     test.execute_client_command("build/Examples/TreeOps dump")
 
     test.cleanup()
