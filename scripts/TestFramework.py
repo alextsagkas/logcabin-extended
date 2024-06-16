@@ -1,7 +1,11 @@
-"""Utilities to run tests and clean environment afterwards."""
+"""
+Utilities to run tests and clean environment afterwards. An example of use is provided in the
+main function.
+"""
 
 import subprocess
 import random
+import time
 
 from localconfig import hosts
 from common import Sandbox, sh
@@ -113,7 +117,7 @@ class TestFramework(object):
             )
             self.sandbox.checkFailures()
     
-    def _reconfigure_cluster(self, reconf_opts=""):
+    def _reconfigure_cluster(self, reconf_opts):
         """
         Execute the reconfigure command to grow the cluster. 
         """
@@ -129,7 +133,7 @@ class TestFramework(object):
             )
         )
     
-    def initialize_cluster(self, server_command="build/LogCabin"):
+    def initialize_cluster(self, server_command="build/LogCabin", reconf_opts=""):
         """ 
         Initialize the cluster by bootstrapping the first server, starting the servers in the
         cluster and reconfiguring the cluster to contain all servers. 
@@ -138,7 +142,7 @@ class TestFramework(object):
         try:
             self._initialize_first_server(server_command)
             self._start_servers(server_command)
-            self._reconfigure_cluster()
+            self._reconfigure_cluster(reconf_opts)
         except:
             self.cleanup()
     
@@ -154,16 +158,28 @@ class TestFramework(object):
         print '-' * 150
 
         try:
-            client = self.sandbox.rsh(
+            self.client_commands += 1
+
+            return self.sandbox.rsh(
                 'localhost',
                 '%s %s' % (client_command, cluster),
+                bg=True,
                 stderr=open('debug/client_command_%d' % self.client_commands, 'w')
             )
-
-            self.client_commands += 1
         except Exception as e:
-            print "Clinet command error: ", e
+            print "Client command error: ", e
             self.cleanup()
+    
+    def time_client_command(self, client_process, timeout_sec=10):
+        start = time.time()
+
+        while client_process.proc.returncode is None:
+            self.sandbox.checkFailures()
+
+            time.sleep(.1)
+
+            if time.time() - start > timeout_sec:
+                raise Exception('Warning: timeout exceeded!')
 
     def cleanup(self, debug=False):
         """
