@@ -35,6 +35,7 @@ class TestFramework(object):
         print "cluster_uuid: ", self.cluster_uuid
         print "snapshotMinLogSize: ", self.snapshotMinLogSize
         print "filename: ", self.filename
+        print "sandbox: ", self.sandbox
 
     def create_configs(self, filename="logcabin"):
         self.filename = filename
@@ -54,17 +55,43 @@ class TestFramework(object):
     def create_folders(self):
         run_command('rm -rf debug/*')
         run_command('mkdir -p debug')
-    
-    def initialize_cluster(self, server_command):
+
+    def _initialize_first_server(self, server_command):
        print 'Initializing first server\'s log'
        print '--------------------------------'
        
+       host = self.hosts[0]
+       command = ('%s --bootstrap --config %s-%d.conf' %
+                     (server_command, self.filename, self.server_ids[0]))
+
+       print('Executing: %s on %s' % (command, host[0]))
+
        self.sandbox.rsh(
-           self.hosts[0][0],
-           '%s --bootstrap --config %s-%d.conf' %
-           (self.filename, server_command, self.server_ids[0]),
+           host[0],
+           command,
            stderr=open('debug/bootstrap', 'w')
        ) 
+    
+    def _start_servers(self, server_command):
+        print '\nStarting servers'
+        print '----------------'
+        for server_id in self.server_ids:
+            host = self.hosts[server_id - 1]
+            command = ('%s --config %s-%d.conf' %
+                       (server_command, self.filename, server_id))
+
+            print('Executing: %s on %s' % (command, host[0]))
+            self.sandbox.rsh(
+                host[0], 
+                command, 
+                bg=True,
+                stderr=open('debug/%d' % server_id, 'w')
+            )
+            self.sandbox.checkFailures()
+    
+    def initialize_cluster(self, server_command="build/LogCabin"):
+        self._initialize_first_server(server_command)
+        self._start_servers(server_command)
 
     def cleanup(self):
         """Clean up the environment."""
@@ -74,9 +101,8 @@ class TestFramework(object):
         run_command('rm -f debug/*')
 
         # Generated from LogCabin
-        # run_command('rm -rf smoketeststorage/')
-        # run_command('rm -rf "Storage/server"*"/"')
-        # run_command('rm -rf "Server/server"*"/"')
+        run_command('rm -rf "Storage/server"*"/"')
+        run_command('rm -rf "Server/server"*"/"')
 
         # Remove Sanbox instance
         del self.sandbox
@@ -84,7 +110,11 @@ class TestFramework(object):
 if __name__ == '__main__':
     test1 = TestFramework()
     test1._print_attr()
-    test1.create_configs("smoketest")
+
+    test1.create_configs()
     test1.create_folders()
+
+    test1.initialize_cluster()
+
     test1.cleanup()
     
