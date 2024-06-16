@@ -146,7 +146,7 @@ class TestFramework(object):
         except:
             self.cleanup()
     
-    def execute_client_command(self, client_command):
+    def execute_client_command(self, client_command, bg=False):
         """ 
         Executes a client command on the cluster. The client binary that is executed must provide
         a --cluster flag to specify the cluster to connect to. 
@@ -163,7 +163,7 @@ class TestFramework(object):
             return self.sandbox.rsh(
                 'localhost',
                 '%s %s' % (client_command, cluster),
-                bg=True,
+                bg=bg,
                 stderr=open('debug/client_command_%d' % self.client_commands, 'w')
             )
         except Exception as e:
