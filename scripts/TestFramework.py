@@ -21,12 +21,14 @@ class TestFramework(object):
 
         alphabet = [chr(ord('a') + i) for i in range(26)]
         self.cluster_uuid = ''.join([random.choice(alphabet) for i in range(8)]) 
+        self.cluster = "--cluster=%s" % ','.join([host for host in self.servers])
 
         self.snapshotMinLogSize = 1024
 
         self.filename = None
 
         self.sandbox = Sandbox()
+        self.client_commands = 0
     
     def _print_attr(self):
         print "hosts: ", self.hosts
@@ -85,7 +87,7 @@ class TestFramework(object):
                 host[0], 
                 command, 
                 bg=True,
-                stderr=open('debug/%d' % server_id, 'w')
+                stderr=open('debug/server_%d' % server_id, 'w')
             )
             self.sandbox.checkFailures()
     
@@ -96,7 +98,7 @@ class TestFramework(object):
 
         sh('build/Examples/Reconfigure %s %s set %s' %
            (
-               "--cluster=%s" % ','.join([server for server in self.servers]),
+               self.cluster,
                reconf_opts,
                ' '.join([server for server in self.servers])
             )
@@ -109,13 +111,29 @@ class TestFramework(object):
             self._reconfigure_cluster()
         except:
             self.cleanup()
+    
+    def execute_client_command(self, client_command):
+        print '\nStarting %s %s on localhost' % (client_command, self.cluster)
+        print '-' * 150
 
-    def cleanup(self):
+        try:
+            client = self.sandbox.rsh('localhost',
+                             '%s %s' % (client_command, self.cluster),
+                             stderr=open('debug/client_command_%d' % self.client_commands, 'w')
+                            )
+
+            self.client_commands += 1
+        except Exception as e:
+            print "Error: ", e
+            self.cleanup()
+
+    def cleanup(self, debug=False):
         """Clean up the environment."""
 
         # Generated from TestFramework.create_config
         run_command('rm "%s-"*".conf"' % self.filename)
-        run_command('rm -f debug/*')
+        if not debug:
+            run_command('rm -f debug/*')
 
         # Generated from LogCabin
         run_command('rm -rf "Storage/server"*"/"')
@@ -133,6 +151,11 @@ if __name__ == '__main__':
     test.create_folders()
 
     test.initialize_cluster()
+
+    test.execute_client_command("build/Examples/TreeOps mkdir /dir1")
+    test.execute_client_command("build/Examples/TreeOps mkdir /dir2")
+    test.execute_client_command("build/Examples/TreeOps write /dir2/file1")
+    test.execute_client_command("build/Examples/TreeOps dump")
 
     test.cleanup()
     
