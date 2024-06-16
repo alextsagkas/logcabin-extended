@@ -58,7 +58,7 @@ def main():
     smoketest.create_folders()
 
     smoketest.initialize_cluster(server_command, reconf_opts)
-    client_process = smoketest.execute_client_command(client_command)
+    client_process = smoketest.execute_client_command(client_command, bg=True)
 
     # Wait for the client to finish
     smoketest.time_client_command(client_process, timeout)
