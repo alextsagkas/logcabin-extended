@@ -28,7 +28,7 @@ Options:
                        [default: build/Examples/SmokeTest]
   --reconf=<opts>      Additional options to pass through to the Reconfigure
                        binary. [default: '']
-  --servers=<num>      Number of servers [default: 5]
+  --servers=<num>      Number of servers [default: 3]
   --timeout=<seconds>  Number of seconds to wait for client to complete before
                        exiting with an error [default: 10]
 """
@@ -46,6 +46,16 @@ def run_command(command):
     except subprocess.CalledProcessError as e:
         print("Warning: Command failed:", e)
 
+def cleanup():
+    """
+    Clean up the files and directories created by this script.
+    """ 
+    run_command('rm -rf smoketeststorage/')
+    run_command('rm -f debug/*')
+    run_command('rm -rf "Storage/server"*"/"')
+    run_command('rm "smoketest-"*".conf"')
+    run_command('rm -rf "Server/server"*"/"')
+
 def main():
     arguments = docopt(__doc__)
     client_command = arguments['--client']
@@ -62,12 +72,7 @@ def main():
     alphabet = [chr(ord('a') + i) for i in range(26)]
     cluster_uuid = ''.join([random.choice(alphabet) for i in range(8)])
     with Sandbox() as sandbox:
-        run_command('rm -rf smoketeststorage/')
-        run_command('rm -f debug/*')
         run_command('mkdir -p debug')
-        run_command('rm -rf "Storage/server"*"/"')
-        run_command('rm "smoketest-"*".conf"')
-        run_command('rm -rf "Server/server"*"/"')
 
         for server_id in server_ids:
             host = smokehosts[server_id - 1]
@@ -119,6 +124,8 @@ def main():
             time.sleep(.1)
             if time.time() - start > timeout:
                 raise Exception('timeout exceeded')
+
+        cleanup()
 
 if __name__ == '__main__':
     main()
