@@ -4,7 +4,7 @@ import subprocess
 import random
 
 from localconfig import hosts
-from common import Sandbox
+from common import Sandbox, sh
 
 def run_command(command):
     try:
@@ -57,7 +57,7 @@ class TestFramework(object):
         run_command('mkdir -p debug')
 
     def _initialize_first_server(self, server_command):
-       print 'Initializing first server\'s log'
+       print '\nInitializing first server\'s log'
        print '--------------------------------'
        
        host = self.hosts[0]
@@ -89,9 +89,26 @@ class TestFramework(object):
             )
             self.sandbox.checkFailures()
     
+    def _reconfigure_cluster(self, reconf_opts=""):
+
+        print '\nGrowing cluster'
+        print '---------------'
+
+        sh('build/Examples/Reconfigure %s %s set %s' %
+           (
+               "--cluster=%s" % ','.join([server for server in self.servers]),
+               reconf_opts,
+               ' '.join([server for server in self.servers])
+            )
+        )
+    
     def initialize_cluster(self, server_command="build/LogCabin"):
-        self._initialize_first_server(server_command)
-        self._start_servers(server_command)
+        try:
+            self._initialize_first_server(server_command)
+            self._start_servers(server_command)
+            self._reconfigure_cluster()
+        except:
+            self.cleanup()
 
     def cleanup(self):
         """Clean up the environment."""
@@ -104,17 +121,18 @@ class TestFramework(object):
         run_command('rm -rf "Storage/server"*"/"')
         run_command('rm -rf "Server/server"*"/"')
 
-        # Remove Sanbox instance
-        del self.sandbox
+        # Release sandbox resources
+        self.sandbox.__exit__(None, None, None)
+
         
 if __name__ == '__main__':
-    test1 = TestFramework()
-    test1._print_attr()
+    test = TestFramework()
+    test._print_attr()
 
-    test1.create_configs()
-    test1.create_folders()
+    test.create_configs()
+    test.create_folders()
 
-    test1.initialize_cluster()
+    test.initialize_cluster()
 
-    test1.cleanup()
+    test.cleanup()
     
