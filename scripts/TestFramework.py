@@ -26,8 +26,9 @@ class TestFramework(object):
     """
     
     def __init__(self):
-        self.server_ips = [host for host, _, _ in hosts]
-        self.server_ids = [server_id for _, _, server_id in hosts]
+        # List of tuples (server_id, server_ip) for each server in the cluster, generated from
+        # common.hosts with 1-1 mapping.
+        self.server_ids_ips = [(server_id, server_ip) for server_ip, _, server_id in hosts]
 
         alphabet = [chr(ord('a') + i) for i in range(26)]
         self.cluster_uuid = ''.join([random.choice(alphabet) for i in range(8)]) 
@@ -42,8 +43,7 @@ class TestFramework(object):
         self.server_processes = {}
     
     def _print_attr(self):
-        print "server_ips: ", self.server_ips
-        print "server_ids: ", self.server_ids
+        print "server_ids_ips: ", self.server_ids_ips
         print "cluster_uuid: ", self.cluster_uuid
         print "snapshotMinLogSize: ", self.snapshotMinLogSize
         print "filename: ", self.filename
@@ -58,7 +58,7 @@ class TestFramework(object):
 
         self.filename = filename
 
-        for server_id, server_ip in zip(self.server_ids, self.server_ips):
+        for server_id, server_ip in self.server_ids_ips:
             with open('%s-%d.conf' % (self.filename, server_id), 'w') as f:
                 f.write('serverId = %d\n' % server_id)
                 f.write('listenAddresses = %s\n' % server_ip)
@@ -86,9 +86,9 @@ class TestFramework(object):
         print '\nInitializing first server\'s log'
         print '--------------------------------'
         
-        server_ip = self.server_ips[0]
+        server_id, server_ip = self.server_ids_ips[0]
         command = ('%s --bootstrap --config %s-%d.conf' %
-                    (server_command, self.filename, self.server_ids[0]))
+                    (server_command, self.filename, server_id))
 
         print('Executing: %s on %s' % (command, server_ip))
 
@@ -98,17 +98,18 @@ class TestFramework(object):
             stderr=open('debug/bootstrap_server', 'w')
         ) 
 
-    def _start_server(self, server_command, server_id, server_ip):
+    def _start_server(self, server_command, server_id_ip):
         """ 
         Start a server in the background process.
         """
 
+        server_id, server_ip = server_id_ip
         command = ('%s --config %s-%d.conf' %
                     (server_command, self.filename, server_id))
 
         print('Executing: %s on %s' % (command, server_ip))
 
-        self.server_processes[server_id] = self.sandbox.rsh(
+        self.server_processes[server_id_ip] = self.sandbox.rsh(
             server_ip,
             command,
             bg=True,
@@ -124,8 +125,8 @@ class TestFramework(object):
         print '\nStarting servers'
         print '----------------'
 
-        for server_id, server_ip in zip(self.server_ids, self.server_ips):
-            self._start_server(server_command, server_id, server_ip)
+        for server_id_ip in self.server_ids_ips:
+            self._start_server(server_command, server_id_ip)
     
     def _reconfigure_cluster(self, reconf_opts):
         """
@@ -137,9 +138,9 @@ class TestFramework(object):
 
         sh('build/Examples/Reconfigure %s %s set %s' %
            (
-               "--cluster=%s" % ','.join([server_ip for server_ip in self.server_ips]),
+               "--cluster=%s" % ','.join([server_ip for _, server_ip in self.server_ids_ips]),
                reconf_opts,
-               ' '.join([server_ip for server_ip in self.server_ips])
+               ' '.join([server_ip for _, server_ip in self.server_ids_ips])
             )
         )
     
@@ -162,7 +163,7 @@ class TestFramework(object):
         a --cluster flag to specify the cluster to connect to. 
         """
 
-        cluster = "--cluster=%s" % ','.join([server_ip for server_ip in self.server_ips])
+        cluster = "--cluster=%s" % ','.join([server_ip for _, server_ip in self.server_ids_ips])
 
         print '\nStarting %s %s on localhost' % (client_command, cluster)
         print '-' * 150
@@ -192,6 +193,11 @@ class TestFramework(object):
                 raise Exception('Warning: timeout exceeded!')
     
     def random_server_kill(self, server_command, timeout, killinterval, launchdelay):
+        """ 
+        Randomly kill a server in the cluster at a given interval and restart it after a given
+        delay. The process is repeated until a timeout is met. The presence of errors is checked.
+        """
+
         start = time.time()
         lastkill = start
         tolaunch = [] # [(time to launch, server id)]
@@ -209,21 +215,21 @@ class TestFramework(object):
 
             # Check if the kill interval has been met
             if now - lastkill > killinterval:
-                server_id = random.choice(self.server_processes.keys())
+                server_id_ip = random.choice(self.server_processes.keys())
 
-                print 'Killing server %d' % server_id
-                print '-----------------'
+                print 'Killing server %d at %s' % (server_id_ip[0], server_id_ip[1])
+                print '--------------------------------'
 
-                self.sandbox.kill(self.server_processes[server_id])
-                del self.server_processes[server_id]
+                self.sandbox.kill(self.server_processes[server_id_ip])
+                del self.server_processes[server_id_ip]
 
                 lastkill = now
-                tolaunch.append((now + launchdelay, server_id))
+                tolaunch.append((now + launchdelay, server_id_ip))
 
             # Check if lanchdelay has been met and there are servers to launch
             while tolaunch and now > tolaunch[0][0]:
-                server_id = tolaunch.pop(0)[1]
-                self._start_server(server_command, server_id, self.server_ips[server_id - 1])
+                server_id_ip = tolaunch.pop(0)[1]
+                self._start_server(server_command, server_id_ip)
 
     def cleanup(self, debug=False):
         """
