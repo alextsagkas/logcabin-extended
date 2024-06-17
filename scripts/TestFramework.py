@@ -38,6 +38,8 @@ class TestFramework(object):
 
         self.sandbox = Sandbox()
         self.client_commands = 0
+
+        self.server_processes = {}
     
     def _print_attr(self):
         print "server_ips: ", self.server_ips
@@ -47,6 +49,7 @@ class TestFramework(object):
         print "filename: ", self.filename
         print "sandbox: ", self.sandbox
         print "client_commands: ", self.client_commands
+        print "server_processes: ", self.server_processes
 
     def create_configs(self, filename="logcabin"):
         """ 
@@ -94,6 +97,24 @@ class TestFramework(object):
             command,
             stderr=open('debug/bootstrap_server', 'w')
         ) 
+
+    def _start_server(self, server_command, server_id, server_ip):
+        """ 
+        Start a server in the background process.
+        """
+
+        command = ('%s --config %s-%d.conf' %
+                    (server_command, self.filename, server_id))
+
+        print('Executing: %s on %s' % (command, server_ip))
+
+        self.server_processes[server_id] = self.sandbox.rsh(
+            server_ip,
+            command,
+            bg=True,
+            stderr=open('debug/server_%d' % server_id, 'w')
+        )
+        self.sandbox.checkFailures()
     
     def _start_servers(self, server_command):
         """
@@ -104,18 +125,7 @@ class TestFramework(object):
         print '----------------'
 
         for server_id, server_ip in zip(self.server_ids, self.server_ips):
-            command = ('%s --config %s-%d.conf' %
-                       (server_command, self.filename, server_id))
-
-            print('Executing: %s on %s' % (command, server_ip))
-
-            self.sandbox.rsh(
-                server_ip, 
-                command, 
-                bg=True,
-                stderr=open('debug/server_%d' % server_id, 'w')
-            )
-            self.sandbox.checkFailures()
+            self._start_server(server_command, server_id, server_ip)
     
     def _reconfigure_cluster(self, reconf_opts):
         """
@@ -180,6 +190,40 @@ class TestFramework(object):
 
             if time.time() - start > timeout_sec:
                 raise Exception('Warning: timeout exceeded!')
+    
+    def random_server_kill(self, server_command, timeout, killinterval, launchdelay):
+        start = time.time()
+        lastkill = start
+        tolaunch = [] # [(time to launch, server id)]
+
+        while True:
+            time.sleep(.1)
+
+            self.sandbox.checkFailures()
+            now = time.time()
+
+            # Check if the timeout has been met
+            if now - start > timeout:
+                print('\nSuccess: Timeout met with no errors!')
+                break
+
+            # Check if the kill interval has been met
+            if now - lastkill > killinterval:
+                server_id = random.choice(self.server_processes.keys())
+
+                print 'Killing server %d' % server_id
+                print '-----------------'
+
+                self.sandbox.kill(self.server_processes[server_id])
+                del self.server_processes[server_id]
+
+                lastkill = now
+                tolaunch.append((now + launchdelay, server_id))
+
+            # Check if lanchdelay has been met and there are servers to launch
+            while tolaunch and now > tolaunch[0][0]:
+                server_id = tolaunch.pop(0)[1]
+                self._start_server(server_command, server_id, self.server_ips[server_id - 1])
 
     def cleanup(self, debug=False):
         """

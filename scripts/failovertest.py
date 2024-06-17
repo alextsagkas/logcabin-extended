@@ -39,99 +39,43 @@ Options:
                            [default: 0]
 """
 
-from __future__ import print_function, division
-from common import sh, captureSh, Sandbox, smokehosts
 from docopt import docopt
 import os
 import random
 import subprocess
 import time
 
+from TestFramework import TestFramework
+
 def main():
+    # Parse command line arguments
     arguments = docopt(__doc__)
-    client_commands = arguments['--client']
+
     server_command = arguments['--binary']
-    num_servers = int(arguments['--servers'])
+    client_commands = arguments['--client']
+
     reconf_opts = arguments['--reconf']
     if reconf_opts == "''":
         reconf_opts = ""
+
     timeout = int(arguments['--timeout'])
     killinterval = int(arguments['--killinterval'])
     launchdelay = int(arguments['--launchdelay'])
 
-    server_ids = range(1, num_servers + 1)
-    cluster = "--cluster=%s" % ','.join([h[0] for h in
-                                        smokehosts[:num_servers]])
-    with Sandbox() as sandbox:
-        sh('rm -rf smoketeststorage/')
-        sh('rm -f debug/*')
-        sh('mkdir -p debug')
+    # Run the test
+    test = TestFramework()
 
-        for server_id in server_ids:
-            host = smokehosts[server_id - 1]
-            with open('smoketest-%d.conf' % server_id, 'w') as f:
-                try:
-                    f.write(open('smoketest.conf').read())
-                    f.write('\n\n')
-                except:
-                    pass
-                f.write('serverId = %d\n' % server_id)
-                f.write('listenAddresses = %s\n' % host[0])
+    test.create_configs()
+    test.create_folders()
 
+    test.initialize_cluster(server_command, reconf_opts)
 
-        print('Initializing first server\'s log')
-        sandbox.rsh(smokehosts[0][0],
-                    '%s --bootstrap --config smoketest-%d.conf' %
-                    (server_command, server_ids[0]),
-                   stderr=open('debug/bootstrap', 'w'))
-        print()
+    for client_command in client_commands:
+        test.execute_client_command(client_command, bg=True)
 
-        processes = {}
+    test.random_server_kill(server_command, timeout, killinterval, launchdelay)
 
-        def launch_server(server_id):
-            host = smokehosts[server_id - 1]
-            command = ('%s --config smoketest-%d.conf -l %s' %
-                       (server_command, server_id, 'debug/%d' % server_id))
-            print('Starting %s on %s' % (command, host[0]))
-            processes[server_id] = sandbox.rsh(
-                host[0], command, bg=True)
-            sandbox.checkFailures()
-
-        for server_id in server_ids:
-            launch_server(server_id)
-
-        print('Growing cluster')
-        sh('build/Examples/Reconfigure %s %s set %s' %
-           (cluster,
-            reconf_opts,
-            ' '.join([h[0] for h in smokehosts[:num_servers]])))
-
-        for i, client_command in enumerate(client_commands):
-            print('Starting %s %s on localhost' % (client_command, cluster))
-            sandbox.rsh('localhost',
-                        '%s %s' % (client_command, cluster),
-                        bg=True,
-                        stderr=open('debug/client%d' % i, 'w'))
-
-        start = time.time()
-        lastkill = start
-        tolaunch = [] # [(time to launch, server id)]
-        while True:
-            time.sleep(.1)
-            sandbox.checkFailures()
-            now = time.time()
-            if now - start > timeout:
-                print('Timeout met with no errors')
-                break
-            if now - lastkill > killinterval:
-                server_id = random.choice(processes.keys())
-                print('Killing server %d' % server_id)
-                sandbox.kill(processes[server_id])
-                del processes[server_id]
-                lastkill = now
-                tolaunch.append((now + launchdelay, server_id))
-            while tolaunch and now > tolaunch[0][0]:
-                launch_server(tolaunch.pop(0)[1])
+    test.cleanup()
 
 if __name__ == '__main__':
     main()
