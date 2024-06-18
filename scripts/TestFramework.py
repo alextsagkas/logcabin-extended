@@ -3,9 +3,13 @@ Utilities to run tests and clean environment afterwards. An example of use is pr
 main function.
 """
 
+from __future__ import print_function
+
 import subprocess
 import random
 import time
+import sys
+import re
 
 from localconfig import hosts
 from common import Sandbox, sh
@@ -40,16 +44,19 @@ class TestFramework(object):
         self.sandbox = Sandbox()
         self.client_commands = 0
 
+        # The running processes of the servers in the cluster. If a server is killed, the process
+        # is removed from the dictionary. Otherwise, the process is kept in the dictionary from the
+        # start of the server until the end of the test.
         self.server_processes = {}
     
     def _print_attr(self):
-        print "server_ids_ips: ", self.server_ids_ips
-        print "cluster_uuid: ", self.cluster_uuid
-        print "snapshotMinLogSize: ", self.snapshotMinLogSize
-        print "filename: ", self.filename
-        print "sandbox: ", self.sandbox
-        print "client_commands: ", self.client_commands
-        print "server_processes: ", self.server_processes
+        print("server_ids_ips: ", self.server_ids_ips)
+        print("cluster_uuid: ", self.cluster_uuid)
+        print("snapshotMinLogSize: ", self.snapshotMinLogSize)
+        print("filename: ", self.filename)
+        print("sandbox: ", self.sandbox)
+        print("client_commands: ", self.client_commands)
+        print("server_processes: ", self.server_processes)
 
     def create_configs(self, filename="logcabin"):
         """ 
@@ -83,8 +90,8 @@ class TestFramework(object):
         the cluster, so it acts as its leader until a new configuration is set.
         """
 
-        print '\nInitializing first server\'s log'
-        print '--------------------------------'
+        print('\nInitializing first server\'s log')
+        print('--------------------------------')
         
         server_id, server_ip = self.server_ids_ips[0]
         command = ('%s --bootstrap --config %s-%d.conf' %
@@ -108,6 +115,7 @@ class TestFramework(object):
                     (server_command, self.filename, server_id))
 
         print('Executing: %s on %s' % (command, server_ip))
+        print('-' * 66)
 
         self.server_processes[server_id_ip] = self.sandbox.rsh(
             server_ip,
@@ -116,14 +124,27 @@ class TestFramework(object):
             stderr=open('debug/server_%d' % server_id, 'w')
         )
         self.sandbox.checkFailures()
+        
+    def _kill_server(self, server_id_ip):
+        """ 
+        Kill a server in the cluster.
+        """
+
+        print('Killing server %d at %s' % (server_id_ip[0], server_id_ip[1]))
+        print('--------------------------------')
+
+        server_process = self.server_processes[server_id_ip]
+
+        del self.server_processes[server_id_ip]
+        self.sandbox.kill(server_process)
     
     def _start_servers(self, server_command):
         """
         Starts the servers in the cluster in background processes. 
         """
 
-        print '\nStarting servers'
-        print '----------------'
+        print('\nStarting servers')
+        print('----------------')
 
         for server_id_ip in self.server_ids_ips:
             self._start_server(server_command, server_id_ip)
@@ -133,8 +154,8 @@ class TestFramework(object):
         Execute the reconfigure command to grow the cluster. 
         """
 
-        print '\nGrowing cluster'
-        print '---------------'
+        print('\nGrowing cluster')
+        print('---------------')
 
         sh('build/Examples/Reconfigure %s %s set %s' %
            (
@@ -165,8 +186,8 @@ class TestFramework(object):
 
         cluster = "--cluster=%s" % ','.join([server_ip for _, server_ip in self.server_ids_ips])
 
-        print '\nStarting %s %s on localhost' % (client_command, cluster)
-        print '-' * 150
+        print('\nStarting %s %s on localhost' % (client_command, cluster))
+        print('-' * 150)
 
         try:
             self.client_commands += 1
@@ -178,7 +199,7 @@ class TestFramework(object):
                 stderr=open('debug/client_command_%d' % self.client_commands, 'w')
             )
         except Exception as e:
-            print "Client command error: ", e
+            print("Client command error: ", e)
             self.cleanup()
     
     def time_client_command(self, client_process, timeout_sec=10):
@@ -217,11 +238,7 @@ class TestFramework(object):
             if now - lastkill > killinterval:
                 server_id_ip = random.choice(self.server_processes.keys())
 
-                print 'Killing server %d at %s' % (server_id_ip[0], server_id_ip[1])
-                print '--------------------------------'
-
-                self.sandbox.kill(self.server_processes[server_id_ip])
-                del self.server_processes[server_id_ip]
+                self._kill_server(server_id_ip)
 
                 lastkill = now
                 tolaunch.append((now + launchdelay, server_id_ip))
@@ -230,6 +247,92 @@ class TestFramework(object):
             while tolaunch and now > tolaunch[0][0]:
                 server_id_ip = tolaunch.pop(0)[1]
                 self._start_server(server_command, server_id_ip)
+
+    def _same(self, lst):
+        """
+        Check if all elements in a list are the same.
+        """
+
+        return len(set(lst)) == 1
+    
+    def _await_stable_leader(self, after_term=0):
+        while True:
+            server_beliefs = {}
+
+            # Only the running servers are considered, whereas the self.server_ids_ips contains all
+            # servers in the cluster.
+            for server_id_ip, server_process in self.server_processes.items():
+                server_beliefs[server_id_ip] = {'leader_id_ip': None,
+                                                'term': None,
+                                                'wake': None}
+                b = server_beliefs[server_id_ip]
+
+                for line in open('debug/server_%d' % server_id_ip[0]):
+
+                    m = re.search('All hail leader (\d+) for term (\d+)', line)
+                    if m is not None:
+                        b['leader_id_ip'] = filter(
+                                lambda server_id_ip: server_id_ip[0] == int(m.group(1)), 
+                                self.server_ids_ips)[0]
+                        b['term'] = int(m.group(2))
+                        continue
+
+                    m = re.search('Now leader for term (\d+)', line)
+                    if m is not None:
+                        b['leader_id_ip'] = server_id_ip
+                        b['term'] = int(m.group(1))
+                        continue
+
+                    m = re.search('Running for election in term (\d+)', line)
+                    if m is not None:
+                        b['wake'] = int(m.group(1))
+
+            terms = [b['term'] for b in server_beliefs.values()]
+            leaders_ids_ips = [b['leader_id_ip'] for b in server_beliefs.values()]
+
+            if self._same(terms) and terms[0] > after_term:
+                assert self._same(leaders_ids_ips), server_beliefs
+
+                return {'leader_id_ip': leaders_ids_ips[0],
+                        'term': terms[0],
+                        'num_woken': sum([1 for b in server_beliefs.values() if b['wake'] > after_term])}
+            else:
+                time.sleep(.25)
+                self.sandbox.checkFailures()
+    
+    def election_performance(self, repeat=100):
+        num_terms = []
+        num_woken = []
+
+        for i in range(repeat):
+            old = self._await_stable_leader()
+            print('Server %d is the leader in term %d' % (old['leader_id_ip'][0], old['term']))
+
+            self._kill_server(old['leader_id_ip'])
+
+            new = self._await_stable_leader(after_term=old['term'])
+            print('Server %d is the leader in term %d' % (new['leader_id_ip'][0], new['term']))
+
+            self.sandbox.checkFailures()
+
+            num_terms.append(new['term'] - old['term'])
+            print('Took %d terms to elect a new leader' % (new['term'] - old['term']))
+            num_woken.append(new['num_woken'])
+            print('%d servers woke up' % (new['num_woken']))
+
+            self._start_server('build/LogCabin', old['leader_id_ip'])
+
+        num_terms.sort()
+        print('Num terms:', 
+            file=sys.stderr)
+        print('\n'.join(['%d: %d' % (i + 1, term) for (i, term) in enumerate(num_terms)]),
+            file=sys.stderr)
+
+        num_woken.sort()
+        print('Num woken:',
+            file=sys.stderr)
+        print('\n'.join(['%d: %d' % (i + 1, n) for (i, n) in enumerate(num_woken)]),
+            file=sys.stderr)
 
     def cleanup(self, debug=False):
         """
