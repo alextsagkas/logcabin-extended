@@ -192,7 +192,7 @@ main(int argc, char** argv)
     std::pair<uint64_t, Configuration> configuration =
         cluster.getConfiguration();
     uint64_t id = configuration.first;
-    std::cout << "Current configuration:" << std::endl;
+    std::cout << std::endl << "Current configuration:" << std::endl;
     printConfiguration(configuration);
 
     std::cout << "Attempting to change cluster membership to the following:"
