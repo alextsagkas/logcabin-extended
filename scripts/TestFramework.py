@@ -213,41 +213,6 @@ class TestFramework(object):
             if time.time() - start > timeout_sec:
                 raise Exception('Warning: timeout exceeded!')
     
-    def random_server_kill(self, server_command, timeout, killinterval, launchdelay):
-        """ 
-        Randomly kill a server in the cluster at a given interval and restart it after a given
-        delay. The process is repeated until a timeout is met. The presence of errors is checked.
-        """
-
-        start = time.time()
-        lastkill = start
-        tolaunch = [] # [(time to launch, server id)]
-
-        while True:
-            time.sleep(.1)
-
-            self.sandbox.checkFailures()
-            now = time.time()
-
-            # Check if the timeout has been met
-            if now - start > timeout:
-                print('\nSuccess: Timeout met with no errors!')
-                break
-
-            # Check if the kill interval has been met
-            if now - lastkill > killinterval:
-                server_id_ip = random.choice(self.server_processes.keys())
-
-                self._kill_server(server_id_ip)
-
-                lastkill = now
-                tolaunch.append((now + launchdelay, server_id_ip))
-
-            # Check if lanchdelay has been met and there are servers to launch
-            while tolaunch and now > tolaunch[0][0]:
-                server_id_ip = tolaunch.pop(0)[1]
-                self._start_server(server_command, server_id_ip)
-
     def cleanup(self, debug=False):
         """
         Clean up the environment: configuration files, debug files and storage folders. Also, 
