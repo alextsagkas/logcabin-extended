@@ -58,6 +58,15 @@ class TestFramework(object):
         print("client_commands: ", self.client_commands)
         print("server_processes: ", self.server_processes)
 
+    def _print_string(self, string):
+        """
+        Print string with dashes below it.
+        """
+        str_len = len(string)
+
+        print(string)
+        print('-' * str_len)
+
     def create_configs(self, filename="logcabin"):
         """ 
         Create configuration files for each server. 
@@ -90,14 +99,13 @@ class TestFramework(object):
         the cluster, so it acts as its leader until a new configuration is set.
         """
 
-        print('\nInitializing first server\'s log')
-        print('--------------------------------')
+        self._print_string('\nInitializing first server\'s log')
         
         server_id, server_ip = self.server_ids_ips[0]
         command = ('%s --bootstrap --config %s-%d.conf' %
                     (server_command, self.filename, server_id))
 
-        print('Executing: %s on %s' % (command, server_ip))
+        self._print_string('Executing: %s on %s' % (command, server_ip))
 
         self.sandbox.rsh(
             server_ip,
@@ -114,8 +122,7 @@ class TestFramework(object):
         command = ('%s --config %s-%d.conf' %
                     (server_command, self.filename, server_id))
 
-        print('Executing: %s on %s' % (command, server_ip))
-        print('-' * 66)
+        self._print_string('Executing: %s on %s' % (command, server_ip))
 
         self.server_processes[server_id_ip] = self.sandbox.rsh(
             server_ip,
@@ -130,8 +137,7 @@ class TestFramework(object):
         Kill a server in the cluster.
         """
 
-        print('Killing server %d at %s' % (server_id_ip[0], server_id_ip[1]))
-        print('--------------------------------')
+        self._print_string('Killing server %d at %s' % (server_id_ip[0], server_id_ip[1]))
 
         server_process = self.server_processes[server_id_ip]
 
@@ -143,8 +149,7 @@ class TestFramework(object):
         Starts the servers in the cluster in background processes. 
         """
 
-        print('\nStarting servers')
-        print('----------------')
+        self._print_string('\nStarting servers')
 
         for server_id_ip in self.server_ids_ips:
             self._start_server(server_command, server_id_ip)
@@ -154,8 +159,7 @@ class TestFramework(object):
         Execute the reconfigure command to grow the cluster. 
         """
 
-        print('\nGrowing cluster')
-        print('---------------')
+        self._print_string('\nGrowing cluster')
 
         sh('build/Examples/Reconfigure %s %s set %s' %
            (
@@ -186,8 +190,7 @@ class TestFramework(object):
 
         cluster = "--cluster=%s" % ','.join([server_ip for _, server_ip in self.server_ids_ips])
 
-        print('\nStarting %s %s on localhost' % (client_command, cluster))
-        print('-' * 150)
+        self._print_string('\nStarting %s %s on localhost' % (client_command, cluster))
 
         try:
             self.client_commands += 1
@@ -203,6 +206,11 @@ class TestFramework(object):
             self.cleanup()
     
     def time_client_command(self, client_process, timeout_sec=10):
+        """ 
+        Time the execution of a client command. If the command takes longer that the timeout, an
+        exception is raised.
+        """
+
         start = time.time()
 
         while client_process.proc.returncode is None:
