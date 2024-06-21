@@ -182,22 +182,74 @@ class TestFramework(object):
         except:
             self.cleanup()
     
-    def execute_client_command(self, client_command, bg=False):
-        """ 
-        Executes a client command on the cluster. The client binary that is executed must provide
-        a --cluster flag to specify the cluster to connect to. 
-        """
+    def _client_command_to_cluster(
+        self, 
+        client_executable, 
+        conf
+    ):
+        options = conf["options"]
+        command = conf["command"]
 
         cluster = "--cluster=%s" % ','.join([server_ip for _, server_ip in self.server_ids_ips])
+        options_formatted = "%s %s" % (options, cluster)
+        client_command = "%s %s %s" % (client_executable, options_formatted, command)
 
-        self._print_string('\nStarting %s %s on localhost' % (client_command, cluster))
+        return client_command
+
+    def _client_command_to_server(
+        self, 
+        client_executable, 
+        conf
+    ):
+        options = conf["options"]
+        command = conf["command"]
+        server_ip = conf["server_ip"]
+
+        server = "--server=%s" % (server_ip)
+        options_formatted = "%s %s" % (options, server)
+        client_command = "%s %s %s" % (client_executable, options_formatted, command)
+
+        return client_command
+
+    def execute_client_command(
+        self, 
+        client_executable, 
+        conf = {
+            "options": "",
+            "command": "",
+            "server_ip": "localhost"
+        },
+        onCluster=True,
+        bg=False
+    ):
+        """ 
+        Executes a client command by providing the client executable, options and command. The
+        client command can be executed on the cluster (onCluser=True) or a single server of it 
+        (onCluster=False). Also, the command can be executed in the background. The latter is 
+        useful for time_client_command. 
+
+        - For cluster commands the conf dictionary has the following keys:
+            - options: options for the client command
+            - command: the command to execute
+        - For server commands the conf dictionary has the following keys
+            - options: options for the client command
+            - command: the command to execute
+            - server_ip: the server to connect to
+        """
+
+        if onCluster:
+            client_command = self._client_command_to_cluster(client_executable, conf)
+        else:
+            client_command = self._client_command_to_server(client_executable, conf)
+
+        self._print_string('\nStarting %s on localhost' % (client_command))
 
         try:
             self.client_commands += 1
 
             return self.sandbox.rsh(
                 'localhost',
-                '%s %s' % (client_command, cluster),
+                '%s' % (client_command),
                 bg=bg,
                 stderr=open('debug/client_command_%d' % self.client_commands, 'w')
             )
