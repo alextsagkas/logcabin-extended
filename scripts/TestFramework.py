@@ -29,15 +29,53 @@ class TestFramework(object):
     Contains the functionality to run tests and clean up the environment afterwards.
     """
     
-    def __init__(self):
-        # List of tuples (server_id, server_ip) for each server in the cluster, generated from
-        # common.hosts with 1-1 mapping.
+    def __init__(
+        self, 
+        snapshotMinLogSize = 67108864,
+        snapshotRatio = 4,
+        snapshotWatchdogMilliseconds = 10000
+    ):
+        """
+        ### General ###
+        List of tuples (server_id, server_ip) for each server in the cluster, generated from
+        common.hosts with 1-1 mapping.
+
+        ### Snapshotting ###
+
+        Each server takes a snapshot once the following conditions are met:
+        log size > snapshotMinLogSize, AND
+        log size > snapshotRatio * last snapshot size
+    
+        Size in bytes of smallest log to snapshot. Default: 64 MB.
+    
+        - snapshotMinLogSize = 67108864 (2^26)
+        
+        Maximum log size as multiple of last snapshot size until server should
+        snapshot.
+        
+        - snapshotRatio = 4
+        
+        Snapshotting is done in a separate child process, and if there was a bug in
+        LogCabin or its libraries, this child might be prone to deadlock (see
+        https://github.com/logcabin/logcabin/issues/121). To detect this deadlock,
+        the parent process includes a watchdog thread that makes sure the child
+        writes something into the snapshot file during each interval; the length of
+        the interval is given by this setting. If the interval elapses with no
+        progress made, the child is killed, and another one is started shortly
+        thereafter. A value of 0 disables this functionality altogether.
+        - snapshotWatchdogMilliseconds = 10000
+        """
+
         self.server_ids_ips = [(server_id, server_ip) for server_ip, _, server_id in hosts]
 
         alphabet = [chr(ord('a') + i) for i in range(26)]
         self.cluster_uuid = ''.join([random.choice(alphabet) for i in range(8)]) 
-
-        self.snapshotMinLogSize = 1024
+        
+        self.snapshotInfos = {
+            "snapshotMinLogSize" : snapshotMinLogSize,
+            "snapshotRatio" : snapshotRatio,
+            "snapshotWatchdogMilliseconds" : snapshotWatchdogMilliseconds
+        }
 
         self.filename = None
 
@@ -52,7 +90,7 @@ class TestFramework(object):
     def _print_attr(self):
         print("server_ids_ips: ", self.server_ids_ips)
         print("cluster_uuid: ", self.cluster_uuid)
-        print("snapshotMinLogSize: ", self.snapshotMinLogSize)
+        print("snapshotInfos: ", self.snapshotInfos)
         print("filename: ", self.filename)
         print("sandbox: ", self.sandbox)
         print("client_commands: ", self.client_commands)
@@ -74,12 +112,18 @@ class TestFramework(object):
 
         self.filename = filename
 
+        # Write snapshotting configuration to smoketest.conf that is appended to each server's
+        # configuration file.
+        with open("smoketest.conf", 'w') as f:
+            for key, value in self.snapshotInfos.items():
+                f.write("%s = %d\n" % (key, value))
+
+        # Write the configuration files for each server.
         for server_id, server_ip in self.server_ids_ips:
             with open('%s-%d.conf' % (self.filename, server_id), 'w') as f:
                 f.write('serverId = %d\n' % server_id)
                 f.write('listenAddresses = %s\n' % server_ip)
                 f.write('clusterUUID = %s\n' % self.cluster_uuid)
-                f.write('snapshotMinLogSize = %s' % self.snapshotMinLogSize)
                 f.write('\n\n')
                 try:
                     f.write(open('smoketest.conf').read())
@@ -280,6 +324,7 @@ class TestFramework(object):
         """
 
         # Generated from TestFramework.create_config
+        run_shell_command('rm "smoketest.conf"')
         run_shell_command('rm "%s-"*".conf"' % self.filename)
         if not debug:
             run_shell_command('rm -f debug/*')
