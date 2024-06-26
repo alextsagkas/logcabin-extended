@@ -323,6 +323,8 @@ class TestFramework(object):
         release the resources of the sandbox, concerning the remote processes.
         """
 
+        self._print_string('\nCleaning up')
+
         # Generated from TestFramework.create_config
         run_shell_command('rm "smoketest.conf"')
         run_shell_command('rm "%s-"*".conf"' % self.filename)
