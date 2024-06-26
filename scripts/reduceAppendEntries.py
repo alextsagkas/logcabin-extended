@@ -32,6 +32,7 @@ Options:
 
 import random
 import time
+import re
 
 from docopt import docopt
 from TestFramework import TestFramework
@@ -70,6 +71,104 @@ class reduceAppendEntries(TestFramework):
             while tolaunch and now > tolaunch[0][0]:
                 server_id_ip = tolaunch.pop(0)[1]
                 self._start_server(server_command, server_id_ip)
+    
+    def test_cluster(self):
+        self.execute_client_command(
+            client_executable = "build/Examples/TreeOps",
+            conf = {
+                "options": "--timeout=3 --verbose",
+                "command": "mkdir /dir1/"
+            }
+        )
+
+        self._kill_server(self.server_ids_ips[1])
+        self._kill_server(self.server_ids_ips[2])
+        self._kill_server(self.server_ids_ips[3])
+
+        self.execute_client_command(
+            client_executable = "build/Examples/TreeOps",
+            conf = {
+                "options": " --verbose",
+                "command": "mkdir /dir5/"
+            },
+            bg = True
+        )
+
+        self.execute_client_command(
+            client_executable = "build/Examples/TreeOps",
+            conf = {
+                "options": " --verbose",
+                "command": "mkdir /dir6/"
+            },
+            bg = True
+        )
+
+        self.execute_client_command(
+            client_executable = "build/Examples/TreeOps",
+            conf = {
+                "options": " --verbose",
+                "command": "mkdir /dir7/"
+            },
+            bg = True
+        )
+
+        self._start_server("build/LogCabin", self.server_ids_ips[1])
+        self._start_server("build/LogCabin", self.server_ids_ips[2])
+        self._start_server("build/LogCabin", self.server_ids_ips[3])
+
+        self.execute_client_command(
+            client_executable = "build/Examples/TreeOps",
+            conf = {
+                "options": " --verbose",
+                "command": "mkdir /dir2/"
+            },
+            bg = True
+        )
+
+        self.execute_client_command(
+            client_executable = "build/Examples/TreeOps",
+            conf = {
+                "options": " --verbose",
+                "command": "mkdir /dir3/"
+            },
+            bg = True
+        )
+
+        self.execute_client_command(
+            client_executable = "build/Examples/TreeOps",
+            conf = {
+                "options": " --verbose",
+                "command": "mkdir /dir4/"
+            },
+            bg = True
+        )
+
+    def dumpStats(self):
+        for _, server_ip in self.server_ids_ips:
+            self.execute_client_command(
+                client_executable = "build/Client/ServerControl",
+                conf = {
+                    "options": "--timeout=10",
+                    "command": "stats dump",
+                    "server_ip": server_ip,
+                },
+                onCluster = False,
+            )
+    
+    def _match_string(self, match_string, line):
+        m = re.search('%s: (\d+)' % match_string, line)
+        if m is not None:
+            print "%s: %s" % (match_string, m.group(1))
+    
+    def printStats(self):
+        for server_id, _ in self.server_ids_ips:
+            self._print_string("\nServer %d stats" % server_id)
+
+            for line in open('debug/server_%d' % server_id):
+                self._match_string('current_term', line)
+                self._match_string('commit_index', line)
+                self._match_string('last_log_index', line)
+
 
 def main():
     # Parse command line arguments
@@ -89,31 +188,11 @@ def main():
 
     test.initialize_cluster(server_command, reconf_opts)
 
-    test.execute_client_command(
-        client_executable = "build/Examples/TreeOps",
-        conf = {
-            "options": "",
-            "command": "mkdir /dir1/"
-        }
-    )
+    test.test_cluster()
+    test.dumpStats()
+    test.printStats()
 
-    test.execute_client_command(
-        client_executable = "build/Examples/TreeOps",
-        conf = {
-            "options": "",
-            "command": "mkdir /dir2/"
-        }
-    )
-
-    test.execute_client_command(
-        client_executable = "build/Examples/TreeOps",
-        conf = {
-            "options": "",
-            "command": "dump"
-        }
-    )
-
-    test.cleanup()
+    test.cleanup(debug=True)
 
 if __name__ == '__main__':
     main()
