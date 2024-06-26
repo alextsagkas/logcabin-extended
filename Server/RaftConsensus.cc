@@ -1298,6 +1298,20 @@ RaftConsensus::handleAppendEntries(
         // We're about to bump our term in the stepDown below: update
         // 'response' accordingly.
         response.set_term(request.term());
+
+        // This is used by the caller to decrement its nextIndex to the previous
+        // term if it does not exist to its log.
+        response.set_conflicting_term(currentTerm);
+
+        // Find the first index of the currentTerm
+        uint64_t firstIndexOfConflict = log->getLogStartIndex();
+        while (firstIndexOfConflict <= log->getLastLogIndex() &&
+               log->getEntry(firstIndexOfConflict).term() != currentTerm) {
+            ++firstIndexOfConflict;
+        }
+
+        // The index to decrement the nextIndex of the caller.
+        response.set_first_index_of_conflict(firstIndexOfConflict);
     }
     // This request is a sign of life from the current leader. Update
     // our term and convert to follower if necessary; reset the
@@ -2366,6 +2380,13 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
             if (response.has_last_log_index() &&
                 peer.nextIndex > response.last_log_index() + 1) {
                 peer.nextIndex = response.last_log_index() + 1;
+            }
+
+            if(response.has_conflicting_term() &&
+               response.has_first_index_of_conflict() &&
+               peer.nextIndex > response.first_index_of_conflict() &&
+               log->getEntry(response.first_index_of_conflict()).term() > response.conflicting_term()) {
+                peer.nextIndex = response.first_index_of_conflict();
             }
         }
     }
