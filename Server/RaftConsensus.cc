@@ -1127,6 +1127,30 @@ RaftConsensus::exit()
     interruptAll();
 }
 
+void RaftConsensus::dump_log() {
+    uint64_t log_index;
+    uint64_t log_term;
+
+    std::vector<std::pair<uint64_t, uint64_t>> index_term;
+
+    // Generate the index_term vector of pairs
+    for (uint64_t i = 1; i <= log->getLastLogIndex(); i++) {
+        log_index = i;
+        log_term = log->getEntry(log_index).term();
+        index_term.push_back(std::make_pair(log_index, log_term));
+    }
+
+    // Print to sdtout the human-readable log
+    std::string log_str("|");
+    for (auto it = index_term.begin(); it != index_term.end(); ++it) {
+        std::ostringstream stringStream;
+        stringStream << " " << it->first << ":" << it->second << " |";
+        std::string index_term_string = stringStream.str();
+        log_str += index_term_string;
+    }
+    NOTICE("Server's %lu log:\n%s", serverId, log_str.c_str());
+}
+
 void
 RaftConsensus::bootstrapConfiguration()
 {
@@ -1438,6 +1462,9 @@ RaftConsensus::handleAppendEntries(
     // long disk writes
     setElectionTimer();
     withholdVotesUntil = Clock::now() + ELECTION_TIMEOUT;
+
+    // Print the log
+    dump_log();
 }
 
 void
@@ -2369,6 +2396,8 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
                     peer.thisCatchUpIterationGoalId = log->getLastLogIndex();
                 }
             }
+
+            dump_log();
         } else {
             if (peer.nextIndex > 1)
                 --peer.nextIndex;

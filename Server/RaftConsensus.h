@@ -1003,6 +1003,13 @@ class RaftConsensus {
     void exit();
 
     /**
+     * Print the log indexes and terms in a human-readable format as NOTICE
+     * log message. Spliting entries with horizontal lines. Each entry is 
+     * printed as: index:term.
+    */
+    virtual void dump_log();
+
+    /**
      * Initialize the log with a configuration consisting of just this server.
      * This should be called just once the very first time the very first
      * server in your cluster is started.
