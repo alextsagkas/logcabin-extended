@@ -1127,6 +1127,30 @@ RaftConsensus::exit()
     interruptAll();
 }
 
+void RaftConsensus::dump_log() {
+    uint64_t log_index;
+    uint64_t log_term;
+
+    std::vector<std::pair<uint64_t, uint64_t>> index_term;
+
+    // Generate the index_term vector of pairs
+    for (uint64_t i = 1; i <= log->getLastLogIndex(); i++) {
+        log_index = i;
+        log_term = log->getEntry(log_index).term();
+        index_term.push_back(std::make_pair(log_index, log_term));
+    }
+
+    // Print to sdtout the human-readable log
+    std::string log_str("|");
+    for (auto it = index_term.begin(); it != index_term.end(); ++it) {
+        std::ostringstream stringStream;
+        stringStream << " " << it->first << ":" << it->second << " |";
+        std::string index_term_string = stringStream.str();
+        log_str += index_term_string;
+    }
+    NOTICE("Server's %lu log:\n%s", serverId, log_str.c_str());
+}
+
 void
 RaftConsensus::bootstrapConfiguration()
 {
@@ -1298,6 +1322,20 @@ RaftConsensus::handleAppendEntries(
         // We're about to bump our term in the stepDown below: update
         // 'response' accordingly.
         response.set_term(request.term());
+
+        // This is used by the caller to decrement its nextIndex to the previous
+        // term if it does not exist to its log.
+        response.set_conflicting_term(currentTerm);
+
+        // Find the first index of the currentTerm
+        uint64_t firstIndexOfConflict = log->getLogStartIndex();
+        while (firstIndexOfConflict <= log->getLastLogIndex() &&
+               log->getEntry(firstIndexOfConflict).term() != currentTerm) {
+            ++firstIndexOfConflict;
+        }
+
+        // The index to decrement the nextIndex of the caller.
+        response.set_first_index_of_conflict(firstIndexOfConflict);
     }
     // This request is a sign of life from the current leader. Update
     // our term and convert to follower if necessary; reset the
@@ -1424,6 +1462,9 @@ RaftConsensus::handleAppendEntries(
     // long disk writes
     setElectionTimer();
     withholdVotesUntil = Clock::now() + ELECTION_TIMEOUT;
+
+    // Print the log
+    dump_log();
 }
 
 void
@@ -2355,6 +2396,8 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
                     peer.thisCatchUpIterationGoalId = log->getLastLogIndex();
                 }
             }
+
+            dump_log();
         } else {
             if (peer.nextIndex > 1)
                 --peer.nextIndex;
@@ -2366,6 +2409,13 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
             if (response.has_last_log_index() &&
                 peer.nextIndex > response.last_log_index() + 1) {
                 peer.nextIndex = response.last_log_index() + 1;
+            }
+
+            if(response.has_conflicting_term() &&
+               response.has_first_index_of_conflict() &&
+               peer.nextIndex > response.first_index_of_conflict() &&
+               log->getEntry(response.first_index_of_conflict()).term() > response.conflicting_term()) {
+                peer.nextIndex = response.first_index_of_conflict();
             }
         }
     }
