@@ -46,3 +46,6 @@ sudo apt-get install -y doxygen
 
 # Valgrind
 sudo apt-get install -y valgrind
+
+# Ping
+sudo apt-get install -y inetutils-ping
