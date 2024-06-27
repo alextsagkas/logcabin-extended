@@ -52,6 +52,10 @@ class TimeoutConfiguration(TestFramework):
                 self.client_commands += 1
 
                 for _, to_server_ip in self.server_ids_ips:
+                    # Skip pinging yourself
+                    if from_server_ip == to_server_ip:
+                        continue
+
                     command = "ping -c %s -s %s %s" % (
                         number_of_pings, number_of_bytes, to_server_ip
                     )
@@ -175,6 +179,8 @@ def main():
 
     test.parse_ping_stats()
     timeout = test.caclulate_timeout()
+
+    test._print_string("\nElection Timeout: %s ms" % timeout)
 
     test.plot_stats()
 

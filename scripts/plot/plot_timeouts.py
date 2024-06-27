@@ -16,6 +16,8 @@ class PlotTimeouts(PlotWithPython3):
         deviation_above = [estimated_rtt[i] + deviation[i] for i in range(len(estimated_rtt))]
         deviation_below = [estimated_rtt[i] - deviation[i] for i in range(len(estimated_rtt))]
 
+        election_timeout = [estimated_rtt[i] + 4 * deviation[i] for i in range(len(estimated_rtt))]
+
         fig, ax = self.plt.subplots()
 
         # Plot Sample RTT
@@ -30,6 +32,13 @@ class PlotTimeouts(PlotWithPython3):
             time_axis,
             estimated_rtt,
             label='Estimated RTT'
+        )
+
+        # Plot Election Timeout
+        ax.plot(
+            time_axis,
+            election_timeout,
+            label='Election Timeout'
         )
 
         # Plot Deviation Bounds
