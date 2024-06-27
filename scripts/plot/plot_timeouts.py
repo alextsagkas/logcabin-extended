@@ -1,3 +1,5 @@
+import time
+
 from plot_python3 import PlotWithPython3
 
 class PlotTimeouts(PlotWithPython3):
@@ -68,7 +70,14 @@ class PlotTimeouts(PlotWithPython3):
         self.decorate_axis(ax, 'Time (ms)', 'RTT (ms)')
         self.decorate_figure(fig)
 
-        fig.savefig('%s/timeout_stats.pdf' % self.figures_dir, backend='pgf')
+        current_time = time.strftime('%Y-%m-%d_%H-%M-%S')
+
+        fig.savefig('%s/timeout_stats-%s.pdf' % (
+                self.figures_dir,
+                current_time
+            ),
+            backend='pgf'
+        )
         
 
 def main():
