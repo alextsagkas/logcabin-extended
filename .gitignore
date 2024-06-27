@@ -11,3 +11,5 @@
 /smoketeststorage
 /storage
 /.vscode
+/scripts/plot/csv
+/scripts/plot/figures

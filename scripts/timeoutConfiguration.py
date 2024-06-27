@@ -133,6 +133,31 @@ class TimeoutConfiguration(TestFramework):
             self.timeout_window * self.estimations["deviation"][-1]
         )
 
+    def plot_stats(self):
+        # Generate time axis
+        time_axis = []
+
+        time_count = 0
+        for ping_sample_rtt in self.ping_sample_rtts:
+            time_count += ping_sample_rtt
+            time_axis.append(time_count)
+
+        # Write to csv file for plotting with python3 matplotlib
+        dir_name = 'plot/csv'
+        file_name = 'timeout_stats.csv'
+
+        with open('scripts/%s/%s' % (dir_name, file_name), 'w') as f:
+
+            f.write('time;sample_rtt;estimated_rtt;deviation\n')
+
+            for i in range(len(time_axis)):
+                f.write('%s;' % time_axis[i])
+                f.write('%s;' % self.ping_sample_rtts[i])
+                f.write('%s;' % self.estimations["average"][i])
+                f.write('%s\n' % self.estimations["deviation"][i])
+
+        run_shell_command('python3 scripts/plot/plot_timeouts.py')
+
 def main():
     test = TimeoutConfiguration()
     test._print_attr()
