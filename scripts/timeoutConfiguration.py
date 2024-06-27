@@ -20,6 +20,11 @@ class TimeoutConfiguration(TestFramework):
         number_of_pings=2,
         number_of_bytes=1024,
     ):
+        """
+        Ping all servers in the cluster from all servers in the cluster. The ping command is configured to exchange number_of_bytes data, whereas the number_of_pings pings are executed.
+
+        Important: Before executing the pings the debug/ folder is cleared. The output of the ping commands is stored in files with the format: debug/client_command_<command_number>_out.
+        """
 
         # Due to appending to the same files in debug/
         run_shell_command('rm -f debug/*')
@@ -60,13 +65,13 @@ class TimeoutConfiguration(TestFramework):
         Store and return ping stats in a dictionary of the form:
         {
             'from_server_id_ip_1': {
-                'to_server_id_ip_1': [ping1, ping2, ...],
-                'to_server_id_ip_2': [ping1, ping2, ...],
+                'to_server_id_ip_1': [ping_time_1, ping_time_2, ...],
+                'to_server_id_ip_2': [ping_time_1, ping_time_2, ...],
                 ...
             },
             'from_server_id_ip_2': {
-                'to_server_id_ip_1': [ping1, ping2, ...],
-                'to_server_id_ip_2': [ping1, ping2, ...],
+                'to_server_id_ip_1': [ping_time_1, ping_time_2, ...],
+                'to_server_id_ip_2': [ping_time_1, ping_time_2, ...],
                 ...
             },
             ...
