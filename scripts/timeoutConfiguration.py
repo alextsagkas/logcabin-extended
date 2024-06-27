@@ -14,6 +14,12 @@ class TimeoutConfiguration(TestFramework):
         self.icmp_header = 8
         self.ip_pattern = r'\b(?:\d{1,3}\.){3}\d{1,3}\b'
         self.ping_separator = r'~*'
+        self.time_pattern = r'time=(\d+\.\d+) ms'
+        # Exponential Weighted Moving Average (EWMA) parameters
+        self.alpha = 0.125
+        self.beta = 0.25
+        # Window for timetout calculation
+        self.timeout_window = 4
 
     def ping_servers(
         self,
@@ -84,20 +90,76 @@ class TimeoutConfiguration(TestFramework):
 
             ping_stats[from_server_id_ip] = {}
 
-            for to_server_id_ip in self.server_ids_ips:
+            with open('debug/client_command_%d_out' % i, 'r') as f:
 
-                ping_stats[from_server_id_ip][to_server_id_ip] = []
+                for to_server_id_ip in self.server_ids_ips:
 
-                with open('debug/client_command_%d_out' % i, 'r') as f:
+                    ping_stats[from_server_id_ip][to_server_id_ip] = []
+
                     for line in f:
                         # Skip to the next ping command
                         m = re.search(self.ping_separator, line)
                         if len(m.group(0)) != 0:
                             break
 
-                        ping_stats[from_server_id_ip][to_server_id_ip].append(line)
+                        # Extract the time from the ping command
+                        m = re.search(self.time_pattern, line)
+                        if  (m is not None and
+                            len(m.group(0)) != 0):
+                            ping_stats[from_server_id_ip][to_server_id_ip].append(float(m.group(1)))
 
         return ping_stats
+
+    def estimate_rtt(
+        self,
+        ping_stats,
+        old_ewma = None
+    ):
+        """
+        Calculates the estimated RTT of the ping times between servers. It uses the Exponential
+        Weighted Moving Average (EWMA) method. Also, it calculates the estimated deviation of the
+        RTT. If old_ewma is provided, the new EWMA is calculated based on the old EWMA.
+
+        The returned dictionary (as the one used, optionally, for inputs) has the form:
+            {
+                "average": estimated_rtt,
+                "deviation": estimated_deviation
+            }
+        The times are in milliseconds.
+        """
+
+        # Initialize the estimation
+        if old_ewma is None:
+            estimation = {
+                "average": 10,
+                "deviation": 10,
+            }
+        else :
+            estimation = {
+                "average": old_ewma["average"],
+                "deviation": old_ewma["deviation"],
+            }
+
+        for from_server, to_server_stats in ping_stats.items():
+            for to_server, ping_times in to_server_stats.items():
+                for ping_time in ping_times:
+                    # Calculate the new average
+                    estimation["average"] = (
+                        (1 - self.alpha) * estimation["average"] +
+                        self.alpha * ping_time
+                    )
+
+                    # Calculate the new deviation
+                    estimation["deviation"] = (
+                        (1 - self.beta) * estimation["deviation"] +
+                        self.beta * abs(ping_time - estimation["average"])
+                    )
+
+        return estimation
+
+    def caclulate_timeout(self, estimation):
+        return estimation["average"] + self.timeout_window * estimation["deviation"]
+
 
 
 def main():
