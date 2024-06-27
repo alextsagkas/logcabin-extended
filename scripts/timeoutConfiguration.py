@@ -18,7 +18,7 @@ class TimeoutConfiguration(TestFramework):
         # Exponential Weighted Moving Average (EWMA) parameters
         self.alpha = 0.125
         self.beta = 0.25
-        # Window for timetout calculation
+        # Window for timeout calculation
         self.timeout_window = 4
 
     def ping_servers(
