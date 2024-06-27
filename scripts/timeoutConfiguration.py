@@ -15,7 +15,13 @@ class TimeoutConfiguration(TestFramework):
         self.ip_pattern = r'\b(?:\d{1,3}\.){3}\d{1,3}\b'
         self.ping_separator = r'~*'
         self.time_pattern = r'time=(\d+\.\d+) ms'
-        # Exponential Weighted Moving Average (EWMA) parameters
+        # History of ping sample RTTs (Round Trip Times)
+        self.ping_sample_rtts = []
+        # History of Exponential Weighted Moving Average (EWMA) parameters
+        self.estimations = {
+            "average": [],
+            "deviation": []
+        }
         self.alpha = 0.125
         self.beta = 0.25
         # Window for timeout calculation
@@ -66,49 +72,46 @@ class TimeoutConfiguration(TestFramework):
             print("Client command error: ", e)
             self.cleanup()
 
-    def _print_ping_stats(self, ping_stats):
-        """
-        Print the ping stats in a human readable format.
-        """
+    def _estimations_step(self, ping_sample_rtt):
+        # Do not try to access previous entry when the lists are empty
+        if (
+            len(self.estimations["average"]) == 0 and
+            len(self.estimations["deviation"]) == 0
+        ):
+            self.estimations["average"].append(ping_sample_rtt)
+            self.estimations["deviation"].append(0)
+            return
 
-        for from_server, to_server_stats in ping_stats.items():
-            print("\nFrom server %d:" % from_server[0])
-            print('--------------')
-            for to_server, ping_times in to_server_stats.items():
-                print("To server %d -> " % to_server[0], end="")
-                print(ping_times)
+        # Estimate RTT
+        self.estimations["average"].append(
+            (1 - self.alpha) * self.estimations["average"][-1] +
+            self.alpha * ping_sample_rtt
+        )
 
+        # Estimate Deviation
+        self.estimations["deviation"].append(
+            (1 - self.beta) * self.estimations["deviation"][-1] +
+            self.beta * abs(ping_sample_rtt - self.estimations["average"][-1])
+        )
 
-    def ping_stats(self):
+    def parse_ping_stats(self):
         """
-        Store and return ping stats in a dictionary of the form:
+        Parse ping stats from ping output files. The ping output files are stored in the debug/
+        folder with the format: debug/client_command_<command_number>_out.
+
+        The history of ping rtts is stored in the ping_sample_rtts array.
+
+        The EWMA parameters are incrementally updated for every sample rtt. The history of the
+        EWMA parameters are stored in the estimations dictionary, in the form:
         {
-            'from_server_id_ip_1': {
-                'to_server_id_ip_1': [ping_time_1, ping_time_2, ...],
-                'to_server_id_ip_2': [ping_time_1, ping_time_2, ...],
-                ...
-            },
-            'from_server_id_ip_2': {
-                'to_server_id_ip_1': [ping_time_1, ping_time_2, ...],
-                'to_server_id_ip_2': [ping_time_1, ping_time_2, ...],
-                ...
-            },
-            ...
+            "average": [entry_1, entry_2, ...],
+            "deviation": [entry_1, entry_2, ...]
         }
         """
 
-        ping_stats = {}
-
         for i, from_server_id_ip in enumerate(self.server_ids_ips, 1):
-
-            ping_stats[from_server_id_ip] = {}
-
             with open('debug/client_command_%d_out' % i, 'r') as f:
-
                 for to_server_id_ip in self.server_ids_ips:
-
-                    ping_stats[from_server_id_ip][to_server_id_ip] = []
-
                     for line in f:
                         # Skip to the next ping command
                         m = re.search(self.ping_separator, line)
@@ -117,63 +120,18 @@ class TimeoutConfiguration(TestFramework):
 
                         # Extract the time from the ping command
                         m = re.search(self.time_pattern, line)
-                        if  (m is not None and
-                            len(m.group(0)) != 0):
-                            ping_stats[from_server_id_ip][to_server_id_ip].append(float(m.group(1)))
+                        if  (m is not None and len(m.group(0)) != 0):
+                            ping_sample_rtt = float(m.group(1))
+                            # Ping Stats
+                            self.ping_sample_rtts.append(ping_sample_rtt)
+                            # estimations History
+                            self._estimations_step(ping_sample_rtt)
 
-        return ping_stats
-
-    def estimate_rtt(
-        self,
-        ping_stats,
-        old_ewma = None
-    ):
-        """
-        Calculates the estimated RTT of the ping times between servers. It uses the Exponential
-        Weighted Moving Average (EWMA) method. Also, it calculates the estimated deviation of the
-        RTT. If old_ewma is provided, the new EWMA is calculated based on the old EWMA.
-
-        The returned dictionary (as the one used, optionally, for inputs) has the form:
-            {
-                "average": estimated_rtt,
-                "deviation": estimated_deviation
-            }
-        The times are in milliseconds.
-        """
-
-        # Initialize the estimation
-        if old_ewma is None:
-            estimation = {
-                "average": 10,
-                "deviation": 10,
-            }
-        else :
-            estimation = {
-                "average": old_ewma["average"],
-                "deviation": old_ewma["deviation"],
-            }
-
-        for from_server, to_server_stats in ping_stats.items():
-            for to_server, ping_times in to_server_stats.items():
-                for ping_time in ping_times:
-                    # Calculate the new average
-                    estimation["average"] = (
-                        (1 - self.alpha) * estimation["average"] +
-                        self.alpha * ping_time
-                    )
-
-                    # Calculate the new deviation
-                    estimation["deviation"] = (
-                        (1 - self.beta) * estimation["deviation"] +
-                        self.beta * abs(ping_time - estimation["average"])
-                    )
-
-        return estimation
-
-    def caclulate_timeout(self, estimation):
-        return estimation["average"] + self.timeout_window * estimation["deviation"]
-
-
+    def caclulate_timeout(self):
+        return (
+            self.estimations["average"][-1] +
+            self.timeout_window * self.estimations["deviation"][-1]
+        )
 
 def main():
     test = TimeoutConfiguration()
