@@ -156,6 +156,7 @@ class TimeoutConfiguration(TestFramework):
                 f.write('%s;' % self.estimations["average"][i])
                 f.write('%s\n' % self.estimations["deviation"][i])
 
+        self._print_string("\nPlotting timeout stats")
         run_shell_command('python3 scripts/plot/plot_timeouts.py')
 
 def main():
@@ -167,7 +168,17 @@ def main():
 
     test.initialize_cluster()
 
-    test.cleanup()
+    test.ping_servers(
+        number_of_pings=10,
+        number_of_bytes=1024,
+    )
+
+    test.parse_ping_stats()
+    timeout = test.caclulate_timeout()
+
+    test.plot_stats()
+
+    test.cleanup(debug=True)
 
 if __name__ == "__main__":
     main()
