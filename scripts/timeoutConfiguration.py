@@ -66,6 +66,19 @@ class TimeoutConfiguration(TestFramework):
             print("Client command error: ", e)
             self.cleanup()
 
+    def _print_ping_stats(self, ping_stats):
+        """
+        Print the ping stats in a human readable format.
+        """
+
+        for from_server, to_server_stats in ping_stats.items():
+            print("\nFrom server %d:" % from_server[0])
+            print('--------------')
+            for to_server, ping_times in to_server_stats.items():
+                print("To server %d -> " % to_server[0], end="")
+                print(ping_times)
+
+
     def ping_stats(self):
         """
         Store and return ping stats in a dictionary of the form:
