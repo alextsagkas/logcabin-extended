@@ -27,9 +27,31 @@ import re
 from TestFramework import TestFramework 
 
 class ElectionTest(TestFramework):
-    def __init__(self):
+    # Metadata from experiments to be stored in the csv file
+    experiment_metadata = {}
+
+    # Experiment identifier
+    experiment_id = 0
+
+    # The value 500 ms is suggested by the creators
+    def __init__(self, electionTimeoutMilliseconds=500):
+        # Initialize the parent class
+        # TestFramework.__init__(self, electionTimeoutMilliseconds)
         TestFramework.__init__(self)
-    
+
+        # Assign an experiment id
+        self.experiment_id = ElectionTest.experiment_id
+        ElectionTest.experiment_id += 1
+
+        # Path to the csv file for the plot
+        self.csv_file = "scripts/plot/csv/electionperf.csv"
+        self.plot_file = "scripts/plot/plot_electionperf.py"
+
+        # Initialize the metadata for the experiment
+        ElectionTest.experiment_metadata[self.experiment_id] = {}
+
+        ElectionTest.experiment_metadata[self.experiment_id]["electionTimeout"] = electionTimeoutMilliseconds
+
     def _same(self, lst):
         """
         Check if all elements in a list are the same.
@@ -83,8 +105,16 @@ class ElectionTest(TestFramework):
                 self.sandbox.checkFailures()
 
     def election_performance(self, repeat=100):
+        print("\n\n==============")
+        print("New Experiment")
+        print("==============\n\n")
+
         num_terms = []
         num_woken = []
+
+        ElectionTest.experiment_metadata[self.experiment_id]["elections"] = repeat
+
+        start_time = time.time()
 
         for i in range(repeat):
             old = self._await_stable_leader()
@@ -104,6 +134,10 @@ class ElectionTest(TestFramework):
 
             self._start_server('build/LogCabin', old['leader_id_ip'])
 
+        end_time = time.time()
+
+        ElectionTest.experiment_metadata[self.experiment_id]["duration"] = end_time - start_time
+
         num_terms.sort()
         print('Num terms:', 
             file=sys.stderr)
@@ -116,17 +150,29 @@ class ElectionTest(TestFramework):
         print('\n'.join(['%d: %d' % (i + 1, n) for (i, n) in enumerate(num_woken)]),
             file=sys.stderr)
 
+def run_experiments(electionTimeouts, repeats):
+    for electionTimeout, repeat in zip(electionTimeouts, repeats):
+        test = ElectionTest(electionTimeout)
+        test.create_configs()
+        test.create_folders()
+
+        test.initialize_cluster()
+
+        test.election_performance(repeat=repeat)
+
+        test.cleanup(debug=True)
+
+
 def main():
-    test = ElectionTest()
+    electionTimeouts = [500, 100]
+    repeats = [10, 5]
 
-    test.create_configs()
-    test.create_folders()
+    run_experiments(
+        electionTimeouts=electionTimeouts,
+        repeats=repeats
+    )
 
-    test.initialize_cluster()
-
-    test.election_performance(repeat=10)
-
-    test.cleanup()
+    print("Experiment metadata:", ElectionTest.experiment_metadata)
 
 if __name__ == '__main__':
     main()
