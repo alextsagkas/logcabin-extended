@@ -5,9 +5,14 @@ from plot_python3 import PlotWithPython3
 class PlotTimeouts(PlotWithPython3):
     def __init__(
         self,
-        filename
+        filename,
+        fig_name = 'timeout/'
     ):
         super(PlotTimeouts, self).__init__(filename)
+
+        # Set the figure name appending the current time
+        curr_time = time.strftime('%Y-%m-%d_%H-%M-%S')
+        self.fig_name = '%s%s' % (fig_name, curr_time)
     
     def plot_stats(self):
         time_axis = self.data['time']
@@ -70,14 +75,7 @@ class PlotTimeouts(PlotWithPython3):
         self.decorate_axis(ax, 'Time (ms)', 'RTT (ms)')
         self.decorate_figure(fig)
 
-        current_time = time.strftime('%Y-%m-%d_%H-%M-%S')
-
-        fig.savefig('%s/timeout_stats-%s.pdf' % (
-                self.figures_dir,
-                current_time
-            ),
-            backend='pgf'
-        )
+        fig.savefig('%s%s.pdf' % (self.figures_dir, self.fig_name), backend='pgf')
         
 
 def main():

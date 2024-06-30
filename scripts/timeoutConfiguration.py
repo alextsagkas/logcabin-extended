@@ -26,6 +26,9 @@ class TimeoutConfiguration(TestFramework):
         self.beta = 0.25
         # Window for timeout calculation
         self.timeout_window = 4
+        # Path to the csv file for the plot
+        self.csv_file = "scripts/plot/csv/timeout_stats.csv"
+        self.plot_file = "scripts/plot/plot_timeouts.py"
 
     def ping_servers(
         self,
@@ -147,10 +150,7 @@ class TimeoutConfiguration(TestFramework):
             time_axis.append(time_count)
 
         # Write to csv file for plotting with python3 matplotlib
-        dir_name = 'plot/csv'
-        file_name = 'timeout_stats.csv'
-
-        with open('scripts/%s/%s' % (dir_name, file_name), 'w') as f:
+        with open('%s' % self.csv_file, 'w') as f:
 
             f.write('time;sample_rtt;estimated_rtt;deviation\n')
 
@@ -161,7 +161,7 @@ class TimeoutConfiguration(TestFramework):
                 f.write('%s\n' % self.estimations["deviation"][i])
 
         self._print_string("\nPlotting timeout stats")
-        run_shell_command('python3 scripts/plot/plot_timeouts.py')
+        run_shell_command('python3 %s' % self.plot_file)
 
 def main():
     test = TimeoutConfiguration()
