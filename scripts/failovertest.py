@@ -93,6 +93,11 @@ class FailoverTest(TestFramework):
             # Check if the failovertest exited
             if test_process.proc.poll() is not None:
                 self.experiment_metadata[self.client_commands]["end_time"] = time.time()
+                # Revive killed servers to start (probably) next test fresh
+                for server_id_ip in self.server_ids_ips:
+                    if server_id_ip not in self.server_processes.keys():
+                        self._start_server(server_command, server_id_ip)
+                # Exit infinite loop
                 break
 
             # Check if the kill interval has been met
