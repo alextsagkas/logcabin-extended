@@ -15,18 +15,29 @@ class PlotReconfigure(PlotWithPython3):
         self.fig_name = '%s%s' % (fig_name, curr_time)
     
     def plot_stats(self):
+        # Parse columns of the CSV file
         servers = self.data['servers']
         time = self.data['time']
         tries = self.data['tries']
 
         fig, ax = self.plt.subplots()
 
-        # Plot Sample RTT
-        ax.plot(
-            time,
-            servers, 
-            label='Test'
-        )
+        # Lengths of unique elements
+        servers_len = len(set(servers))
+        tries_len = len(set(tries))
+
+        for i in range(0, tries_len):
+            start = i * servers_len
+            end = (i+1) * servers_len
+
+            label = '%d tries' % tries[start] if tries[start] > 1 else '1 try'
+
+            # Plot Sample RTT
+            ax.plot(
+                time[start:end],
+                servers[start:end],
+                label=label
+            )
 
         self.decorate_axis(ax, 'Time (s)', 'Servers')
         self.decorate_figure(fig)

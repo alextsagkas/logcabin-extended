@@ -3,7 +3,7 @@
 """
 This runs ReconfigureTest that constantly changes the configuration to a random
 subset of all the servers participating in the initial one. This action is performed
-for a specified number of tries
+for a specified number of tries in an array.
 
 Usage:
   reconfiguretest.py [options]
@@ -14,24 +14,31 @@ Options:
   --binary=<cmd>       Server binary to execute [default: build/LogCabin]
   --reconf=<opts>      Additional options to pass through to the Reconfigure
                        binary. [default: '']
-  --tries=<num>        Number of times to reconfigure the cluster [default: 10]
 """
 
 import random
 import time
-
 from docopt import docopt
+from common import sh
+
 from TestFramework import TestFramework, run_shell_command
 
 class ReconfigureTest(TestFramework):
     def __init__(self):
         TestFramework.__init__(self)
+        # Infos from localconfig.py
+        self.parent_server_ids_ips = self.server_ids_ips
         # Path to the csv file for the plot
         self.csv_file = "scripts/plot/csv/reconfigure.csv"
+        self.plot_file = "scripts/plot/plot_reconfigure.py"
     
-    def set_servers_num(self, servers_num):
+    def set_servers_num(
+        self,
+        servers_num,
+        server_command
+    ):
         # Number of servers in the cluster
-        self.server_ids_ips = self.server_ids_ips[:servers_num]
+        self.server_ids_ips = self.parent_server_ids_ips[:servers_num]
 
     def create_folders(self):
         TestFramework.create_folders(self)
@@ -55,6 +62,23 @@ class ReconfigureTest(TestFramework):
             }
         )
 
+    def _reconfigure_cluster(self, reconf_opts):
+        """
+        Execute the reconfigure command to grow the cluster.
+        """
+
+        self._print_string('\nGrowing cluster')
+
+        # Important: The --cluster option must contain all the server (old and new)
+        sh('build/Examples/Reconfigure %s %s set %s' %
+            (
+                "--cluster=%s" % ','.join(
+                    [server_ip for _, server_ip in self.parent_server_ids_ips]),
+                    reconf_opts,
+                ' '.join([server_ip for _, server_ip in self.server_ids_ips])
+            )
+        )
+
     def reconfigure_test(self, tries):
         start_time = time.time()
         self.membership_changes(tries)
@@ -67,10 +91,14 @@ class ReconfigureTest(TestFramework):
                 tries)
             )
 
+    def plot(self):
+        self._print_string("\nPlotting reconfigure results")
+        run_shell_command('python3 %s' % self.plot_file)
+
 def run_test(
         server_command,
         reconf_opts,
-        tries,
+        tries_range,
         debug = False
     ):
     test = ReconfigureTest()
@@ -81,17 +109,21 @@ def run_test(
     test._initialize_first_server(server_command)
     test._start_servers(server_command)
 
-    for servers_num in range(5, 1, -1):
+    for tries in tries_range:
+        print("\n=======================================")
+        print("Running ReconfigureTest with tries: %d" % tries)
         print("=======================================")
-        print("Running ReconfigureTest with servers: %d" % servers_num)
-        print("=======================================")
 
-        test.set_servers_num(servers_num)
-        test._reconfigure_cluster(reconf_opts)
-        test.reconfigure_test(tries)
+        for servers_num in range(len(test.parent_server_ids_ips), 1, -1):
+            print("\n=======================================")
+            print("Running ReconfigureTest with servers: %d" % servers_num)
+            print("=======================================")
 
-        time.sleep(1)
+            test.set_servers_num(servers_num, server_command)
+            test._reconfigure_cluster(reconf_opts)
+            test.reconfigure_test(tries)
 
+    test.plot()
     test.cleanup(debug=debug)
 
 
@@ -105,13 +137,11 @@ def main():
     if reconf_opts == "''":
         reconf_opts = ""
 
-    tries = int(arguments['--tries'])
-
     # Run the test
     run_test(
         server_command = server_command,
         reconf_opts = reconf_opts,
-        tries = tries,
+        tries_range = [10, 100, 1000],
         debug = True
     )
 
