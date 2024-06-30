@@ -28,12 +28,6 @@ Options:
   --binary=<cmd>       Server binary to execute [default: build/LogCabin]
   --reconf=<opts>      Additional options to pass through to the Reconfigure
                        binary. [default: '']
-  --writes=<count>     Number of writes to perform before exiting
-                       [default: 100]
-  --killinterval=<seconds>  Number of seconds to wait between killing servers
-                            [default: 5]
-  --launchdelay=<seconds>  Number of seconds to wait before restarting server
-                           [default: 0]
 """
 
 import random
@@ -45,9 +39,13 @@ from TestFramework import TestFramework
 class FailoverTest(TestFramework):
     def __init__(self):
         TestFramework.__init__(self)
+        # Hold metadata from each experiment.
+        # E.g. start and end time, kill interval, launch delay
+        self.experiment_metadata = {}
     
     def run_failovertest(self, writes):
-        return self.execute_client_command(
+
+        client_process = self.execute_client_command(
             client_executable = 'build/Examples/FailoverTest',
             conf = {
                 "options": "--writes=%d" % (writes),
@@ -55,6 +53,14 @@ class FailoverTest(TestFramework):
             },
             bg = True
         )
+
+        # This is placed after the start of the client command so as to increment the
+        # self.client_commands counter first.
+        self.experiment_metadata[self.client_commands] = {} # initialize
+        self.experiment_metadata[self.client_commands]["start_time"] = time.time()
+        self.experiment_metadata[self.client_commands]["writes"] = writes
+
+        return client_process
 
     def random_server_kill(
         self,
@@ -71,6 +77,9 @@ class FailoverTest(TestFramework):
         Important: The killinerval should be greater or equal to the launchdelay.
         """
 
+        self.experiment_metadata[self.client_commands]["kill_interval"] = killinterval
+        self.experiment_metadata[self.client_commands]["launch_delay"] = launchdelay
+
         start = time.time()
         lastkill = start
         tolaunch = [] # [(time to launch, server id)]
@@ -83,6 +92,7 @@ class FailoverTest(TestFramework):
 
             # Check if the failovertest exited
             if test_process.proc.poll() is not None:
+                self.experiment_metadata[self.client_commands]["end_time"] = time.time()
                 break
 
             # Check if the kill interval has been met
@@ -109,14 +119,10 @@ def main():
     if reconf_opts == "''":
         reconf_opts = ""
 
-    writes = int(arguments['--writes'])
+    writes_array = [4, 6]
 
-    killinterval = int(arguments['--killinterval'])
-    launchdelay = int(arguments['--launchdelay'])
-
-    if killinterval < launchdelay:
-        print("Kill interval should be greater or equal to launch delay")
-        sys.exit(1)
+    killinervals = [2, 4]
+    launchdelays = [1, 2]
 
     # Run the test
     test = FailoverTest()
@@ -126,9 +132,14 @@ def main():
 
     test.initialize_cluster(server_command, reconf_opts)
 
-    process = test.run_failovertest(writes)
+    for writes in writes_array:
+        for killinterval, launchdelay in zip(killinervals, launchdelays):
+            print("\n===============================")
+            print("killinterval: %d, launchdelay: %d" % (killinterval, launchdelay))
+            print("===============================")
 
-    test.random_server_kill(process, server_command, killinterval, launchdelay)
+            process = test.run_failovertest(writes)
+            test.random_server_kill(process, server_command, killinterval, launchdelay)
 
     test.cleanup()
 
