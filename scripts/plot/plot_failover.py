@@ -1,6 +1,7 @@
 from plot_python3 import PlotWithPython3
 
 import time
+import numpy as np
 
 class PlotFailover(PlotWithPython3):
     def __init__(
@@ -14,43 +15,91 @@ class PlotFailover(PlotWithPython3):
         curr_time = time.strftime('%Y-%m-%d_%H-%M-%S')
         self.fig_name = '%s%s' % (fig_name, curr_time)
 
-    def plot_unique(
-        self, 
-        column,
-        fig,
-        ax
-    ):
+    def _normalize_array(self, array, range=(0, 1)):
         """
-        Plot unique values of a column in a scatter plot. The x-axis is the time
-        and the y-axis is the writes.
+        Normalize an array between a range. Used to specify sizes in scatter plots.
         """
 
-        for unique in column.unique():
-            data_unique = self.data[self.data[column.name] == unique]
+        array_min = np.min(array)
+        array_max = np.max(array)
 
-            time = data_unique['time']
-            writes = data_unique['writes']
+        diff = array_max - array_min
 
-            # Plot Sample RTT
-            ax.scatter(
-                time,
-                writes,
-                label="%s: %ds" % (column.name, unique),
-            )
+        # Normalize between 0 and 1
+        normalized_array = (array - array_min) / diff
+        # Normalize in the desired range
+        normalize_in_range = normalized_array * (range[1] - range[0]) + range[0]
 
-            self.decorate_axis(ax, 'Time (s)', 'Writes')
-            self.decorate_figure(fig)
+        return normalize_in_range
+
+    def _denormalize_lambda(self, array, range=(0, 1)):
+        """
+        Returns lambda function to denormalize an array between a range. Used to recover the
+        original values from the normalized sizes in scatter plots.
+        """
+
+        return lambda x : ((x - range[0]) / (range[1] - range[0])) * (np.max(array) - np.min(array)) + np.min(array)
+
+    def decorate_axis(self, ax, sc, norm_inverse, xlabel = 'Time (s)', ylabel = 'Writes'):
+        # Labels
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+
+        # Ticks
+        ax.grid(visible=True, which='major', color='#666666', linestyle='--')
+        ax.minorticks_on()
+        ax.grid(visible=True, which='minor', color='#999999', linestyle='--', alpha=0.2)
+
+        # Sizes legend
+        handles, labels = sc.legend_elements(prop="sizes", alpha=0.1, func=norm_inverse)
+        legend = ax.legend(handles, labels, title="Kill Intervals (s)")
+        ax.add_artist(legend)
+
+    def decorate_figure(self, fig, sc):
+        # Color bar
+        fig.colorbar(
+            sc,
+            location = 'right',
+            label = 'Launch delay (s)',
+        )
+
+        fig.set_size_inches(self.fig_size)
 
     def plot_stats(self):
-        # Parse columns of the CSV file
-        killintervals = self.data['killinterval']
-        launchdelays = self.data['launchdelay']
+        # Parse data
+        time = self.data['time']
+        writes = self.data['writes']
+        killinterval = self.data['killinterval']
+        launchdelay = self.data['launchdelay']
 
-        fig1, ax1 = self.plt.subplots()
-        self.plot_unique(killintervals, fig1, ax1)
+        # Create axis and figure
+        fig, ax = self.plt.subplots(layout="constrained")
 
-        # self.plt.show()
-        fig1.savefig('%s%s.pdf' % (self.figures_dir, self.fig_name), backend='pgf')
+        # Scatter plot marker size range
+        size_range = (5, 100)
+
+        # Scatter plot
+        sc = ax.scatter(
+            time,
+            writes,
+            s = self._normalize_array(killinterval, size_range),
+            c = launchdelay,
+            alpha=0.8,
+        )
+
+        # Decorations
+        self.decorate_axis(
+            ax=ax,
+            sc=sc,
+            xlabel='Time (s)',
+            ylabel='Writes',
+            norm_inverse=self._denormalize_lambda(killinterval, size_range)
+        )
+
+        self.decorate_figure(fig, sc)
+
+        self.plt.show()
+        # fig.savefig('%s%s.pdf' % (self.figures_dir, self.fig_name), backend='pgf')
         
 
 def main():
