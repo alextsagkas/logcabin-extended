@@ -34,7 +34,7 @@ import random
 import time
 
 from docopt import docopt
-from TestFramework import TestFramework
+from TestFramework import TestFramework, run_shell_command
 
 class FailoverTest(TestFramework):
     def __init__(self):
@@ -42,6 +42,9 @@ class FailoverTest(TestFramework):
         # Hold metadata from each experiment.
         # E.g. start and end time, kill interval, launch delay
         self.experiment_metadata = {}
+        # Path to the csv file for the plot
+        self.csv_file = "scripts/plot/csv/failover.csv"
+        self.plot_file = "scripts/plot/plot_failover.py"
     
     def run_failovertest(self, writes):
 
@@ -114,6 +117,27 @@ class FailoverTest(TestFramework):
                 server_id_ip = tolaunch.pop(0)[1]
                 self._start_server(server_command, server_id_ip)
 
+    def _write_csv(self):
+        with open("%s" % self.csv_file, 'w') as f:
+            f.write("time;writes;killinterval;launchdelay\n")
+
+            for _, metadata in self.experiment_metadata.items():
+                f.write('%f;%d;%d;%d\n' % (
+                    metadata["end_time"] - metadata["start_time"],
+                    int(metadata["writes"]),
+                    metadata["kill_interval"],
+                    metadata["launch_delay"])
+                )
+
+    def plot(self):
+        self._write_csv()
+        self._print_string("\nPlotting failover results")
+        try:
+            run_shell_command('python3 %s' % self.plot_file)
+        except Exception as e:
+            self._print_string("Error: %s" % e)
+            self.cleanup()
+
 def main():
     # Parse command line arguments
     arguments = docopt(__doc__)
@@ -139,13 +163,18 @@ def main():
 
     for writes in writes_array:
         for killinterval, launchdelay in zip(killinervals, launchdelays):
-            print("\n===============================")
-            print("killinterval: %d, launchdelay: %d" % (killinterval, launchdelay))
-            print("===============================")
+            print("\n============================================")
+            print("writes: %d, killinterval: %d, launchdelay: %d" % (
+                writes,
+                killinterval,
+                launchdelay)
+            )
+            print("============================================")
 
             process = test.run_failovertest(writes)
             test.random_server_kill(process, server_command, killinterval, launchdelay)
 
+    test.plot()
     test.cleanup()
 
 if __name__ == '__main__':
