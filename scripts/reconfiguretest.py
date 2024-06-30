@@ -2,7 +2,8 @@
 
 """
 This runs ReconfigureTest that constantly changes the configuration to a random
-subset of all the servers participating in the initial one.
+subset of all the servers participating in the initial one. This action is performed
+for a specified number of tries in an array.
 
 Usage:
   reconfiguretest.py [options]
@@ -13,33 +14,117 @@ Options:
   --binary=<cmd>       Server binary to execute [default: build/LogCabin]
   --reconf=<opts>      Additional options to pass through to the Reconfigure
                        binary. [default: '']
-  --timeout=<seconds>  Number of seconds to wait for client to complete before
-                       exiting with an ok [default: 20]
 """
 
 import random
 import time
-
 from docopt import docopt
-from TestFramework import TestFramework
+from common import sh
+
+from TestFramework import TestFramework, run_shell_command
 
 class ReconfigureTest(TestFramework):
     def __init__(self):
         TestFramework.__init__(self)
+        # Infos from localconfig.py
+        self.parent_server_ids_ips = self.server_ids_ips
+        # Path to the csv file for the plot
+        self.csv_file = "scripts/plot/csv/reconfigure.csv"
+        self.plot_file = "scripts/plot/plot_reconfigure.py"
     
-    def check_timeout(self, client_process, timeout):
-        start = time.time()
-        while client_process.proc.returncode is None:
+    def set_servers_num(
+        self,
+        servers_num,
+        server_command
+    ):
+        # Number of servers in the cluster
+        self.server_ids_ips = self.parent_server_ids_ips[:servers_num]
 
-            time.sleep(.1)
-            
-            self.sandbox.checkFailures()
+    def create_folders(self):
+        TestFramework.create_folders(self)
+        # Create the csv file for the plot
+        with open("%s" % (self.csv_file), 'w') as f:
+            # write the columns
+            f.write('servers;time;tries\n')
 
-            if time.time() - start > timeout:
-                client_process.proc.kill()
-                time.sleep(0.5)
-                print("Success: Timeout met with no errors!")
-                break
+    def cleanup(self, debug=False):
+        TestFramework.cleanup(self, debug=debug)
+        if not debug:
+            # Remove the csv file
+            run_shell_command("rm %s" % (self.csv_file))
+
+    def membership_changes(self, tries):
+        self.execute_client_command(
+            client_executable = "build/Examples/ReconfigureTest",
+            conf = {
+                "options": "--tries=%d" % (tries),
+                "command": ""
+            }
+        )
+
+    def _reconfigure_cluster(self, reconf_opts):
+        """
+        Execute the reconfigure command to grow the cluster.
+        """
+
+        self._print_string('\nGrowing cluster')
+
+        # Important: The --cluster option must contain all the server (old and new)
+        sh('build/Examples/Reconfigure %s %s set %s' %
+            (
+                "--cluster=%s" % ','.join(
+                    [server_ip for _, server_ip in self.parent_server_ids_ips]),
+                    reconf_opts,
+                ' '.join([server_ip for _, server_ip in self.server_ids_ips])
+            )
+        )
+
+    def reconfigure_test(self, tries):
+        start_time = time.time()
+        self.membership_changes(tries)
+        end_time = time.time()
+
+        with open("%s" % (self.csv_file), 'a') as f:
+            f.write('%d;%f;%d\n' % (
+                len(self.server_ids_ips),
+                end_time - start_time,
+                tries)
+            )
+
+    def plot(self):
+        self._print_string("\nPlotting reconfigure results")
+        run_shell_command('python3 %s' % self.plot_file)
+
+def run_test(
+        server_command,
+        reconf_opts,
+        tries_range,
+        debug = False
+    ):
+    test = ReconfigureTest()
+
+    test.create_configs()
+    test.create_folders()
+
+    test._initialize_first_server(server_command)
+    test._start_servers(server_command)
+
+    for tries in tries_range:
+        print("\n=======================================")
+        print("Running ReconfigureTest with tries: %d" % tries)
+        print("=======================================")
+
+        for servers_num in range(len(test.parent_server_ids_ips), 1, -1):
+            print("\n=======================================")
+            print("Running ReconfigureTest with servers: %d" % servers_num)
+            print("=======================================")
+
+            test.set_servers_num(servers_num, server_command)
+            test._reconfigure_cluster(reconf_opts)
+            test.reconfigure_test(tries)
+
+    test.plot()
+    test.cleanup(debug=debug)
 
 
 def main():
@@ -52,22 +137,13 @@ def main():
     if reconf_opts == "''":
         reconf_opts = ""
 
-    timeout = int(arguments['--timeout'])
-
     # Run the test
-    test = ReconfigureTest()
-
-    test.create_configs()
-    test.create_folders()
-
-    test.initialize_cluster(server_command, reconf_opts)
-
-    time.sleep(1)
-
-    client_process = test.execute_client_command("build/Examples/ReconfigureTest", bg=True)
-    test.check_timeout(client_process, timeout)
-
-    test.cleanup()
+    run_test(
+        server_command = server_command,
+        reconf_opts = reconf_opts,
+        tries_range = [10, 100, 1000],
+        debug = True
+    )
 
 if __name__ == '__main__':
     main()
