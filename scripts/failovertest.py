@@ -26,13 +26,10 @@ Usage:
 Options:
   -h --help            Show this help message and exit
   --binary=<cmd>       Server binary to execute [default: build/LogCabin]
-  --client=<cmd>       Client binary to execute
-                       [default: 'build/Examples/FailoverTest']
   --reconf=<opts>      Additional options to pass through to the Reconfigure
                        binary. [default: '']
-  --servers=<num>      Number of servers [default: 5]
-  --timeout=<seconds>  Number of seconds to wait for client to complete before
-                       exiting with an ok [default: 20]
+  --writes=<count>     Number of writes to perform before exiting
+                       [default: 100]
   --killinterval=<seconds>  Number of seconds to wait between killing servers
                             [default: 5]
   --launchdelay=<seconds>  Number of seconds to wait before restarting server
@@ -49,10 +46,29 @@ class FailoverTest(TestFramework):
     def __init__(self):
         TestFramework.__init__(self)
     
-    def random_server_kill(self, server_command, timeout, killinterval, launchdelay):
+    def run_failovertest(self, writes):
+        return self.execute_client_command(
+            client_executable = 'build/Examples/FailoverTest',
+            conf = {
+                "options": "--writes=%d" % (writes),
+                "command": ""
+            },
+            bg = True
+        )
+
+    def random_server_kill(
+        self,
+        test_process,
+        server_command,
+        killinterval,
+        launchdelay
+    ):
         """ 
         Randomly kill a server in the cluster at a given interval and restart it after a given
-        delay. The process is repeated until a timeout is met. The presence of errors is checked.
+        delay. The process is repeated until the failovertest exits. The presence of errors is
+        checked.
+
+        Important: The killinerval should be greater or equal to the launchdelay.
         """
 
         start = time.time()
@@ -65,9 +81,8 @@ class FailoverTest(TestFramework):
             self.sandbox.checkFailures()
             now = time.time()
 
-            # Check if the timeout has been met
-            if now - start > timeout:
-                print('\nSuccess: Timeout met with no errors!')
+            # Check if the failovertest exited
+            if test_process.proc.poll() is not None:
                 break
 
             # Check if the kill interval has been met
@@ -89,15 +104,19 @@ def main():
     arguments = docopt(__doc__)
 
     server_command = arguments['--binary']
-    client_commands = arguments['--client']
 
     reconf_opts = arguments['--reconf']
     if reconf_opts == "''":
         reconf_opts = ""
 
-    timeout = int(arguments['--timeout'])
+    writes = int(arguments['--writes'])
+
     killinterval = int(arguments['--killinterval'])
     launchdelay = int(arguments['--launchdelay'])
+
+    if killinterval < launchdelay:
+        print("Kill interval should be greater or equal to launch delay")
+        sys.exit(1)
 
     # Run the test
     test = FailoverTest()
@@ -107,10 +126,9 @@ def main():
 
     test.initialize_cluster(server_command, reconf_opts)
 
-    for client_command in client_commands:
-        test.execute_client_command(client_command, bg=True)
+    process = test.run_failovertest(writes)
 
-    test.random_server_kill(server_command, timeout, killinterval, launchdelay)
+    test.random_server_kill(process, server_command, killinterval, launchdelay)
 
     test.cleanup()
 
