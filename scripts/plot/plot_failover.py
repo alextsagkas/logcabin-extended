@@ -76,7 +76,7 @@ class PlotFailover(PlotWithPython3):
         fig, ax = self.plt.subplots(layout="constrained")
 
         # Scatter plot marker size range
-        size_range = (5, 100)
+        size_range = (4, 40)
 
         # Scatter plot
         sc = ax.scatter(
@@ -98,8 +98,7 @@ class PlotFailover(PlotWithPython3):
 
         self.decorate_figure(fig, sc)
 
-        self.plt.show()
-        # fig.savefig('%s%s.pdf' % (self.figures_dir, self.fig_name), backend='pgf')
+        fig.savefig('%s%s.pdf' % (self.figures_dir, self.fig_name), backend='pgf')
         
 
 def main():

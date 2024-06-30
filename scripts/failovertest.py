@@ -148,10 +148,10 @@ def main():
     if reconf_opts == "''":
         reconf_opts = ""
 
-    writes_array = [4, 6]
+    writes_array = [8, 128, 512, 1024, 2048]
 
-    killinervals = [2, 4]
-    launchdelays = [1, 2]
+    killintervals = [4, 10, 20]
+    launchdelays = [2, 7, 6]
 
     # Run the test
     test = FailoverTest()
@@ -162,7 +162,7 @@ def main():
     test.initialize_cluster(server_command, reconf_opts)
 
     for writes in writes_array:
-        for killinterval, launchdelay in zip(killinervals, launchdelays):
+        for killinterval, launchdelay in zip(killintervals, launchdelays):
             print("\n============================================")
             print("writes: %d, killinterval: %d, launchdelay: %d" % (
                 writes,
