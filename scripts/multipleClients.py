@@ -1,7 +1,7 @@
 import itertools
 import time
 
-from TestFramework import TestFramework
+from TestFramework import TestFramework, run_shell_command
 from common import sh
 
 class MultipleClients(TestFramework):
@@ -16,7 +16,7 @@ class MultipleClients(TestFramework):
 
         # Path to the csv file for the plot
         self.csv_file = "scripts/plot/csv/multipleclients.csv"
-        self.plot_file = "scripts/plot/multipleclients.py"
+        self.plot_file = "scripts/plot/plot_multipleclients.py"
 
     def _start_servers(self, server_command):
         """
@@ -90,6 +90,12 @@ class MultipleClients(TestFramework):
 
     def plot(self):
         self._write_csv()
+        self._print_string('\nPlotting results')
+        try:
+            run_shell_command("python3 %s" % self.plot_file)
+        except Exception as e:
+            self._print_string("Error: %s" % e)
+            self.cleanup()
 
 def combinations(*arrays):
     """
@@ -135,10 +141,10 @@ def main():
     # writes_array = [1000]
     # servers_num = [1, 2, 3, 4, 5]
 
-    threads_array = [1, 10]
+    threads_array = [1, 10, 100]
     sizes_array = [1024]
     writes_array = [1000]
-    servers_num = [3]
+    servers_num = [1, 2, 3, 4, 5]
 
     run_experiments(threads_array, sizes_array, writes_array, servers_num)
 
