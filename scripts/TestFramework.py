@@ -33,10 +33,12 @@ class TestFramework(object):
         self, 
         snapshotMinLogSize = 67108864,
         snapshotRatio = 4,
-        snapshotWatchdogMilliseconds = 10000
+        snapshotWatchdogMilliseconds = 10000,
+        electionTimeoutMilliseconds = 500
     ):
         """
         ### General ###
+
         List of tuples (server_id, server_ip) for each server in the cluster, generated from
         common.hosts with 1-1 mapping.
 
@@ -63,7 +65,34 @@ class TestFramework(object):
         the interval is given by this setting. If the interval elapses with no
         progress made, the child is killed, and another one is started shortly
         thereafter. A value of 0 disables this functionality altogether.
+
         - snapshotWatchdogMilliseconds = 10000
+
+        ### Raft ###
+
+        The number of milliseconds that a follower waits without hearing from a
+        current leader or granting its vote, before it becomes a candidate and starts
+        a new election. Until we understand how Raft would behave, it's strongly
+        recommended that you use the same election timeout setting on every server.
+
+        - electionTimeoutMilliseconds = 500
+
+        A leader sends RPCs at least this often, even if there is no data to
+        send. Default and sane value: electionTimeoutMilliseconds / 2.
+
+        - heartbeatPeriodMilliseconds = 250
+
+        A candidate or leader waits this long after an RPC fails before sending
+        another one, so as to not overwhelm the network with retries.
+        Default value: electionTimeoutMilliseconds / 2.
+
+        - rpcFailureBackoffMilliseconds = 250
+
+        If true and compiled with BUILDTYPE=DEBUG mode, runs through some additional
+        checks inside the Raft module. These are very costly, especially if you have
+        a large number of entries.
+
+        - raftDebug = no
         """
 
         self.server_ids_ips = [(server_id, server_ip) for server_ip, _, server_id in hosts]
@@ -74,7 +103,8 @@ class TestFramework(object):
         self.snapshotInfos = {
             "snapshotMinLogSize" : snapshotMinLogSize,
             "snapshotRatio" : snapshotRatio,
-            "snapshotWatchdogMilliseconds" : snapshotWatchdogMilliseconds
+            "snapshotWatchdogMilliseconds" : snapshotWatchdogMilliseconds,
+            "electionTimeoutMilliseconds" : electionTimeoutMilliseconds
         }
 
         self.filename = None

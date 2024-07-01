@@ -24,12 +24,34 @@ import time
 import sys
 import re
 
-from TestFramework import TestFramework 
+from TestFramework import TestFramework, run_shell_command
 
 class ElectionTest(TestFramework):
-    def __init__(self):
+    # Metadata from experiments to be stored in the csv file
+    experiment_metadata = {}
+
+    # Experiment identifier
+    experiment_id = 0
+
+    # Path to the csv file for the plot
+    csv_file = "scripts/plot/csv/electionperf.csv"
+    plot_file = "scripts/plot/plot_electionperf.py"
+
+    # The value 500 ms is suggested by the creators
+    def __init__(self, electionTimeoutMilliseconds=500):
+        # Initialize the parent class
+        # TestFramework.__init__(self, electionTimeoutMilliseconds)
         TestFramework.__init__(self)
-    
+
+        # Assign an experiment id
+        self.experiment_id = ElectionTest.experiment_id
+        ElectionTest.experiment_id += 1
+
+        # Initialize the metadata for the experiment
+        ElectionTest.experiment_metadata[self.experiment_id] = {}
+
+        ElectionTest.experiment_metadata[self.experiment_id]["electionTimeout"] = electionTimeoutMilliseconds
+
     def _same(self, lst):
         """
         Check if all elements in a list are the same.
@@ -83,8 +105,16 @@ class ElectionTest(TestFramework):
                 self.sandbox.checkFailures()
 
     def election_performance(self, repeat=100):
+        print("\n\n==============")
+        print("New Experiment")
+        print("==============\n\n")
+
         num_terms = []
         num_woken = []
+
+        ElectionTest.experiment_metadata[self.experiment_id]["elections"] = repeat
+
+        start_time = time.time()
 
         for i in range(repeat):
             old = self._await_stable_leader()
@@ -104,6 +134,10 @@ class ElectionTest(TestFramework):
 
             self._start_server('build/LogCabin', old['leader_id_ip'])
 
+        end_time = time.time()
+
+        ElectionTest.experiment_metadata[self.experiment_id]["duration"] = end_time - start_time
+
         num_terms.sort()
         print('Num terms:', 
             file=sys.stderr)
@@ -116,17 +150,62 @@ class ElectionTest(TestFramework):
         print('\n'.join(['%d: %d' % (i + 1, n) for (i, n) in enumerate(num_woken)]),
             file=sys.stderr)
 
+    @staticmethod
+    def _write_csv():
+        with open("%s" % ElectionTest.csv_file, 'w') as f:
+            f.write("elections;time;electionTimeout\n")
+
+            for _, metadata in ElectionTest.experiment_metadata.items():
+                f.write('%d;%f;%.2f\n' % (
+                    metadata["elections"],
+                    metadata["duration"],
+                    metadata["electionTimeout"])
+                )
+
+    @staticmethod
+    def plot():
+        ElectionTest._write_csv()
+
+        print("\nPlotting electionperf results")
+        print("-------------------------------")
+        try:
+            run_shell_command('python3 %s' % ElectionTest.plot_file)
+        except Exception as e:
+            print("Error: %s" % e)
+
+def combinations(array1, array2):
+    return [(x, y) for x in array1 for y in array2]
+
+def run_experiments(electionTimeouts, repeats):
+    """
+    Runs experiment with all different combinations of electionTimeouts and repeats.
+    """
+
+    for electionTimeout, repeat in combinations(electionTimeouts, repeats):
+        print("\n\n================================")
+        print("electionTimeout: %d, repeats: %d" % (electionTimeout, repeat))
+        print("================================\n\n")
+
+        test = ElectionTest(electionTimeout)
+        test.create_configs()
+        test.create_folders()
+
+        test.initialize_cluster()
+
+        test.election_performance(repeat=repeat)
+
+        test.cleanup(debug=True)
+
 def main():
-    test = ElectionTest()
+    electionTimeouts = [1000, 500, 100, 10]
+    repeats = [1, 10, 100, 1000]
 
-    test.create_configs()
-    test.create_folders()
+    run_experiments(
+        electionTimeouts=electionTimeouts,
+        repeats=repeats
+    )
 
-    test.initialize_cluster()
-
-    test.election_performance(repeat=10)
-
-    test.cleanup()
+    ElectionTest.plot()
 
 if __name__ == '__main__':
     main()
