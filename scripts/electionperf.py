@@ -173,8 +173,19 @@ class ElectionTest(TestFramework):
         except Exception as e:
             print("Error: %s" % e)
 
+def combinations(array1, array2):
+    return [(x, y) for x in array1 for y in array2]
+
 def run_experiments(electionTimeouts, repeats):
-    for electionTimeout, repeat in zip(electionTimeouts, repeats):
+    """
+    Runs experiment with all different combinations of electionTimeouts and repeats.
+    """
+
+    for electionTimeout, repeat in combinations(electionTimeouts, repeats):
+        print("\n\n================================")
+        print("electionTimeout: %d, repeats: %d" % (electionTimeout, repeat))
+        print("================================\n\n")
+
         test = ElectionTest(electionTimeout)
         test.create_configs()
         test.create_folders()
@@ -186,8 +197,8 @@ def run_experiments(electionTimeouts, repeats):
         test.cleanup(debug=True)
 
 def main():
-    electionTimeouts = [500, 100, 10]
-    repeats = [10, 5, 15]
+    electionTimeouts = [1000, 500, 100, 10]
+    repeats = [1, 10, 100, 1000]
 
     run_experiments(
         electionTimeouts=electionTimeouts,
