@@ -24,7 +24,7 @@ import time
 import sys
 import re
 
-from TestFramework import TestFramework 
+from TestFramework import TestFramework, run_shell_command
 
 class ElectionTest(TestFramework):
     # Metadata from experiments to be stored in the csv file
@@ -32,6 +32,10 @@ class ElectionTest(TestFramework):
 
     # Experiment identifier
     experiment_id = 0
+
+    # Path to the csv file for the plot
+    csv_file = "scripts/plot/csv/electionperf.csv"
+    plot_file = "scripts/plot/plot_electionperf.py"
 
     # The value 500 ms is suggested by the creators
     def __init__(self, electionTimeoutMilliseconds=500):
@@ -42,10 +46,6 @@ class ElectionTest(TestFramework):
         # Assign an experiment id
         self.experiment_id = ElectionTest.experiment_id
         ElectionTest.experiment_id += 1
-
-        # Path to the csv file for the plot
-        self.csv_file = "scripts/plot/csv/electionperf.csv"
-        self.plot_file = "scripts/plot/plot_electionperf.py"
 
         # Initialize the metadata for the experiment
         ElectionTest.experiment_metadata[self.experiment_id] = {}
@@ -150,6 +150,29 @@ class ElectionTest(TestFramework):
         print('\n'.join(['%d: %d' % (i + 1, n) for (i, n) in enumerate(num_woken)]),
             file=sys.stderr)
 
+    @staticmethod
+    def _write_csv():
+        with open("%s" % ElectionTest.csv_file, 'w') as f:
+            f.write("elections;time;electionTimeout\n")
+
+            for _, metadata in ElectionTest.experiment_metadata.items():
+                f.write('%d;%f;%.2f\n' % (
+                    metadata["elections"],
+                    metadata["duration"],
+                    metadata["electionTimeout"])
+                )
+
+    @staticmethod
+    def plot():
+        ElectionTest._write_csv()
+
+        print("\nPlotting electionperf results")
+        print("-------------------------------")
+        try:
+            run_shell_command('python3 %s' % ElectionTest.plot_file)
+        except Exception as e:
+            print("Error: %s" % e)
+
 def run_experiments(electionTimeouts, repeats):
     for electionTimeout, repeat in zip(electionTimeouts, repeats):
         test = ElectionTest(electionTimeout)
@@ -162,17 +185,16 @@ def run_experiments(electionTimeouts, repeats):
 
         test.cleanup(debug=True)
 
-
 def main():
-    electionTimeouts = [500, 100]
-    repeats = [10, 5]
+    electionTimeouts = [500, 100, 10]
+    repeats = [10, 5, 15]
 
     run_experiments(
         electionTimeouts=electionTimeouts,
         repeats=repeats
     )
 
-    print("Experiment metadata:", ElectionTest.experiment_metadata)
+    ElectionTest.plot()
 
 if __name__ == '__main__':
     main()
