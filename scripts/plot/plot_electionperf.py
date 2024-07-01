@@ -15,6 +15,16 @@ class PlotElectionPerf(PlotWithPython3):
         curr_time = time.strftime('%Y-%m-%d_%H-%M-%S')
         self.fig_name = '%s%s' % (fig_name, curr_time)
 
+    def decorate_figure(self, fig, sc):
+        # Color bar
+        fig.colorbar(
+            sc,
+            location = 'right',
+            label = 'Election Timeout (ms)',
+        )
+
+        fig.set_size_inches(self.fig_size)
+
     def plot_stats(self):
         # Parse data
         elections = self.data['elections']
@@ -22,20 +32,21 @@ class PlotElectionPerf(PlotWithPython3):
         electionTimeout = self.data['electionTimeout']
 
         # Create axis and figure
-        fig, ax = self.plt.subplots()
+        fig, ax = self.plt.subplots(layout="constrained")
 
         # Scatter plot
         sc = ax.scatter(
             time,
             elections,
-            label='Elections',
+            alpha=0.8,
+            c=electionTimeout,
         )
 
+        # Decorations
         self.decorate_axis(ax, 'Duration (s)', 'Elections')
-        self.decorate_figure(fig)
+        self.decorate_figure(fig, sc)
 
-        self.plt.show()
-        # fig.savefig('%s%s.pdf' % (self.figures_dir, self.fig_name), backend='pgf')
+        fig.savefig('%s%s.pdf' % (self.figures_dir, self.fig_name), backend='pgf')
         
 
 def main():
