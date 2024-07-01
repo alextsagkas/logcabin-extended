@@ -1,4 +1,5 @@
 import itertools
+import time
 
 from TestFramework import TestFramework
 from common import sh
@@ -10,6 +11,12 @@ class MultipleClients(TestFramework):
         self.parent_server_ids_ips = self.server_ids_ips
         # Number of servers in the cluster
         self.server_ids_ips = self.parent_server_ids_ips
+        # Metadata for experiments
+        self.experiment_metadata = {}
+
+        # Path to the csv file for the plot
+        self.csv_file = "scripts/plot/csv/multipleclients.csv"
+        self.plot_file = "scripts/plot/multipleclients.py"
 
     def _start_servers(self, server_command):
         """
@@ -55,6 +62,7 @@ class MultipleClients(TestFramework):
     ):
         self._print_string('\nExecuting client command with %d threads' % threads)
 
+        start_time = time.time()
         self.execute_client_command(
             client_executable="build/Examples/Benchmark",
             conf= {
@@ -62,6 +70,26 @@ class MultipleClients(TestFramework):
                 "command": ""
             }
         )
+        end_time = time.time()
+
+        self.experiment_metadata[self.client_commands] = {
+            "threads": threads,
+            "servers": len(self.server_ids_ips),
+            "throughput": writes / (end_time - start_time), # writes per second
+        }
+
+    def _write_csv(self):
+        with open("%s" % self.csv_file, "w") as f:
+            f.write("threads;servers;throughput\n")
+            for _, metadata in self.experiment_metadata.items():
+                f.write("%d;%d;%f\n" % (
+                    metadata["threads"],
+                    metadata["servers"],
+                    metadata["throughput"])
+                )
+
+    def plot(self):
+        self._write_csv()
 
 def combinations(*arrays):
     """
@@ -94,6 +122,9 @@ def run_experiments(threads_array, sizes_array, writes_array, servers_num):
             size=size,
             writes=writes
         )
+
+    # Plot the results
+    test.plot()
 
     # Cleanup environment
     test.cleanup()
