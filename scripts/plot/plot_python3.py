@@ -1,3 +1,4 @@
+import matplotlib.font_manager as font_manager
 import matplotlib.pyplot as plt
 import pandas as pd
 
@@ -21,8 +22,14 @@ class PlotWithPython3(object):
 
         # Set matplotlib style
         self.plt = plt
-        self.plt.rcParams["font.family"] = "serif"
-        self.plt.rcParams.update({'font.size': 7})
+
+        font_path = '/usr/share/fonts/truetype/ebgaramond/EBGaramond12-Regular.ttf'
+        font_manager.fontManager.addfont(font_path)
+        prop = font_manager.FontProperties(fname=font_path)
+
+        self.plt.rcParams['font.family'] = 'serif'
+        self.plt.rcParams['font.serif'] = prop.get_name()
+        self.plt.rcParams.update({'font.size': 10})
     
     def store_data(self):
         # Read data from csv file with pandas
