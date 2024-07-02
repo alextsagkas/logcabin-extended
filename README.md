@@ -53,6 +53,7 @@ Pre-requisites:
 - protobuf (v2.6.x suggested, v2.5.x should work, v2.3.x is not supported)
 - crypto++ (v5.6.1 is known to work)
 - doxygen (optional; v1.8.8 is known to work)
+- python (v2.7 and v3.10 for the test scripts and the plots correspondingly)
 
 In short, RHEL/CentOS 6 should work, as well as anything more recent.
 
