@@ -1462,9 +1462,6 @@ RaftConsensus::handleAppendEntries(
     // long disk writes
     setElectionTimer();
     withholdVotesUntil = Clock::now() + ELECTION_TIMEOUT;
-
-    // Print the log
-    dump_log();
 }
 
 void
@@ -2396,8 +2393,6 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
                     peer.thisCatchUpIterationGoalId = log->getLastLogIndex();
                 }
             }
-
-            dump_log();
         } else {
             if (peer.nextIndex > 1)
                 --peer.nextIndex;
@@ -2414,7 +2409,7 @@ RaftConsensus::appendEntries(std::unique_lock<Mutex>& lockGuard,
             if(response.has_conflicting_term() &&
                response.has_first_index_of_conflict() &&
                peer.nextIndex > response.first_index_of_conflict() &&
-               log->getEntry(response.first_index_of_conflict()).term() > response.conflicting_term()) {
+               log->getEntry(response.first_index_of_conflict()).term() != response.conflicting_term()) {
                 peer.nextIndex = response.first_index_of_conflict();
             }
         }
