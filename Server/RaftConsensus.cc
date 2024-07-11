@@ -1375,6 +1375,11 @@ RaftConsensus::handleAppendEntries(
     // If we got this far, we're accepting the request.
     response.set_success(true);
 
+    // Do not include conflicting_term and first_index_of_conflict in the
+    // response, since we are accepting the request (sucess = true).
+    response.clear_conflicting_term();
+    response.clear_first_index_of_conflict();
+
     // This needs to be able to handle duplicated RPC requests. We compare the
     // entries' terms to know if we need to do the operation; otherwise,
     // reapplying requests can result in data loss.
