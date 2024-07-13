@@ -16,29 +16,34 @@ class PlotMultipleClients(PlotWithPython3):
         self.fig_name = '%s%s' % (fig_name, curr_time)
 
     def plot_stats(self):
-        # Parse data
-        threads = self.data['threads']
-        servers = self.data['servers']
-        throughput = self.data['throughput']
+        # Group data
+        grouped_data = self.data.groupby(['threads', 'servers'])['throughput']
+        print(self.data)
+
+        # Calculate mean and standard deviation of the throughput
+        grouped_data = grouped_data.agg(['mean', 'std']).reset_index()
 
         # Create axis and figure
         fig, ax = self.plt.subplots()
 
-        for thread in threads.unique():
+        for thread in grouped_data['threads'].unique():
             # Filter data
-            data = self.data[self.data['threads'] == thread]
+            data = grouped_data[grouped_data['threads'] == thread]
 
             # Parse data
             servers = data['servers']
-            throughput = data['throughput']
+            throughput_mean = data['mean']
+            throughput_std = data['std']
 
             # Label
             label = "%d threads" % thread if thread > 1 else "%d thread" % thread
 
             # Scatter plot
-            ax.plot(
+            ax.errorbar(
                 servers,
-                throughput,
+                throughput_mean,
+                yerr=throughput_std,
+                capsize=4,
                 label=label,
                 linewidth=1.5,
                 marker='o',

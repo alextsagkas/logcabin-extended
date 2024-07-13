@@ -56,6 +56,7 @@ class MultipleClients(TestFramework):
 
     def execute_client_command_with_multiple_threads(
         self,
+        run,
         threads=1,
         size=1024,
         writes=1000
@@ -76,16 +77,18 @@ class MultipleClients(TestFramework):
             "threads": threads,
             "servers": len(self.server_ids_ips),
             "throughput": writes / (end_time - start_time), # writes per second
+            "run": run
         }
 
     def _write_csv(self):
         with open("%s" % self.csv_file, "w") as f:
-            f.write("threads;servers;throughput\n")
+            f.write("threads;servers;throughput;run\n")
             for _, metadata in self.experiment_metadata.items():
-                f.write("%d;%d;%f\n" % (
+                f.write("%d;%d;%f;%d\n" % (
                     metadata["threads"],
                     metadata["servers"],
-                    metadata["throughput"])
+                    metadata["throughput"],
+                    metadata["run"])
                 )
 
     def plot(self):
@@ -103,7 +106,7 @@ def combinations(*arrays):
     """
     return [list(x) for x in itertools.product(*arrays)]
 
-def run_experiments(threads_array, sizes_array, writes_array, servers_num):
+def run_experiments(threads_array, sizes_array, writes_array, servers_num, runs=5):
     arrays_combinations = combinations(threads_array, sizes_array, writes_array, servers_num)
 
     # Test preparation
@@ -115,19 +118,24 @@ def run_experiments(threads_array, sizes_array, writes_array, servers_num):
     # Intial configuration contains all the servers
     test.initialize_cluster()
 
-    for threads, size, writes, servers in arrays_combinations:
+    for run in range(runs):
         print("\n\n================================================")
-        print("threads: %d, size: %d, writes: %d, servers: %d" % (threads, size, writes, servers))
+        print("Run %d" % run)
         print("================================================\n\n")
+        for threads, size, writes, servers in arrays_combinations:
+            print("\n\n================================================")
+            print("threads: %d, size: %d, writes: %d, servers: %d" % (threads, size, writes, servers))
+            print("================================================\n\n")
 
-        test.set_servers_num(servers)
-        test._reconfigure_cluster()
+            test.set_servers_num(servers)
+            test._reconfigure_cluster()
 
-        test.execute_client_command_with_multiple_threads(
-            threads=threads,
-            size=size,
-            writes=writes
-        )
+            test.execute_client_command_with_multiple_threads(
+                threads=threads,
+                size=size,
+                writes=writes,
+                run=run
+            )
 
     # Plot the results
     test.plot()
@@ -136,11 +144,6 @@ def run_experiments(threads_array, sizes_array, writes_array, servers_num):
     test.cleanup()
 
 def main():
-    # threads_array = [1, 10, 100]
-    # sizes_array = [1024]
-    # writes_array = [1000]
-    # servers_num = [1, 2, 3, 4, 5]
-
     threads_array = [1, 10, 100]
     sizes_array = [1024]
     writes_array = [1000]
