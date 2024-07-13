@@ -148,10 +148,10 @@ def main():
     if reconf_opts == "''":
         reconf_opts = ""
 
-    writes_array = [8, 128, 512, 1024, 2048]
+    writes_array = [512, 1024, 2048]
 
-    killintervals = [4, 10, 20]
-    launchdelays = [2, 7, 6]
+    killintervals = [4, 4, 4, 6, 6, 6, 8, 8, 8]
+    launchdelays = [1, 2, 3, 1, 3, 5, 1, 4, 7]
 
     # Run the test
     test = FailoverTest()

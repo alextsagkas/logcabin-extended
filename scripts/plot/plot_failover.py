@@ -52,7 +52,7 @@ class PlotFailover(PlotWithPython3):
 
         # Sizes legend
         handles, labels = sc.legend_elements(prop="sizes", alpha=0.1, func=norm_inverse)
-        legend = ax.legend(handles, labels, title="Kill Intervals (s)")
+        legend = ax.legend(handles, labels, title="Kill Interval (s)", loc="lower right")
         ax.add_artist(legend)
 
     def decorate_figure(self, fig, sc):
@@ -85,6 +85,7 @@ class PlotFailover(PlotWithPython3):
             s = self._normalize_array(killinterval, size_range),
             c = launchdelay,
             alpha=0.8,
+            linewidths=0,
         )
 
         # Decorations
