@@ -113,8 +113,7 @@ class ElectionTest(TestFramework):
         num_woken = []
 
         ElectionTest.experiment_metadata[self.experiment_id]["elections"] = repeat
-
-        start_time = time.time()
+        ElectionTest.experiment_metadata[self.experiment_id]["duration"] = []
 
         for i in range(repeat):
             old = self._await_stable_leader()
@@ -122,8 +121,11 @@ class ElectionTest(TestFramework):
 
             self._kill_server(old['leader_id_ip'])
 
+            start_time = time.time()
             new = self._await_stable_leader(after_term=old['term'])
+            end_time = time.time()
             print('Server %d is the leader in term %d' % (new['leader_id_ip'][0], new['term']))
+            ElectionTest.experiment_metadata[self.experiment_id]["duration"].append(end_time - start_time)
 
             self.sandbox.checkFailures()
 
@@ -133,10 +135,6 @@ class ElectionTest(TestFramework):
             print('%d servers woke up' % (new['num_woken']))
 
             self._start_server('build/LogCabin', old['leader_id_ip'])
-
-        end_time = time.time()
-
-        ElectionTest.experiment_metadata[self.experiment_id]["duration"] = end_time - start_time
 
         num_terms.sort()
         print('Num terms:', 
@@ -156,11 +154,16 @@ class ElectionTest(TestFramework):
             f.write("elections;time;electionTimeout\n")
 
             for _, metadata in ElectionTest.experiment_metadata.items():
-                f.write('%d;%f;%.2f\n' % (
-                    metadata["elections"],
-                    metadata["duration"],
-                    metadata["electionTimeout"])
-                )
+                elections = metadata["elections"]
+                duration = metadata["duration"]
+                electionTimeout = metadata["electionTimeout"]
+
+                for time in duration:
+                    f.write('%d;%f;%.2f\n' % (
+                        elections,
+                        time,
+                        electionTimeout)
+                    )
 
     @staticmethod
     def plot():
@@ -173,15 +176,13 @@ class ElectionTest(TestFramework):
         except Exception as e:
             print("Error: %s" % e)
 
-def combinations(array1, array2):
-    return [(x, y) for x in array1 for y in array2]
-
-def run_experiments(electionTimeouts, repeats):
+def run_experiments(electionTimeouts):
     """
-    Runs experiment with all different combinations of electionTimeouts and repeats.
+    Runs experiment with different electionTimeouts for a number of repeats.
     """
+    repeat = 100
 
-    for electionTimeout, repeat in combinations(electionTimeouts, repeats):
+    for electionTimeout in electionTimeouts:
         print("\n\n================================")
         print("electionTimeout: %d, repeats: %d" % (electionTimeout, repeat))
         print("================================\n\n")
@@ -197,12 +198,10 @@ def run_experiments(electionTimeouts, repeats):
         test.cleanup(debug=True)
 
 def main():
-    electionTimeouts = [1000, 500, 100, 10]
-    repeats = [1, 10, 100, 1000]
+    electionTimeouts = [1000, 500, 200, 10]
 
     run_experiments(
         electionTimeouts=electionTimeouts,
-        repeats=repeats
     )
 
     ElectionTest.plot()

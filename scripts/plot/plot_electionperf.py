@@ -15,36 +15,31 @@ class PlotElectionPerf(PlotWithPython3):
         curr_time = time.strftime('%Y-%m-%d_%H-%M-%S')
         self.fig_name = '%s%s' % (fig_name, curr_time)
 
-    def decorate_figure(self, fig, sc):
-        # Color bar
-        fig.colorbar(
-            sc,
-            location = 'right',
-            label = 'Election Timeout (ms)',
-        )
-
-        fig.set_size_inches(self.fig_size)
-
     def plot_stats(self):
         # Parse data
-        elections = self.data['elections']
-        time = self.data['time']
         electionTimeout = self.data['electionTimeout']
 
         # Create axis and figure
-        fig, ax = self.plt.subplots(layout="constrained")
+        fig, ax = self.plt.subplots()
 
-        # Scatter plot
-        sc = ax.scatter(
-            time,
-            elections,
-            alpha=0.8,
-            c=electionTimeout,
-        )
+        for electionTimeout in electionTimeout.unique():
+            # Filter data
+            data = self.data[self.data['electionTimeout'] == electionTimeout]
+
+            # Parse data
+            elections = data['elections']
+            time = data['time'].sort_values().reset_index(drop=True)
+
+            # Scatter plot
+            ax.plot(
+                time * 1000,
+                time.index/(elections-1),
+                label="%d ms" % electionTimeout,
+            )
 
         # Decorations
-        self.decorate_axis(ax, 'Duration (s)', 'Elections')
-        self.decorate_figure(fig, sc)
+        self.decorate_axis(ax, 'Duration (ms)', 'Cummulative Fraction')
+        self.decorate_figure(fig)
 
         fig.savefig('%s%s.pdf' % (self.figures_dir, self.fig_name), backend='pgf')
         
