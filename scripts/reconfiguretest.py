@@ -45,7 +45,7 @@ class ReconfigureTest(TestFramework):
         # Create the csv file for the plot
         with open("%s" % (self.csv_file), 'w') as f:
             # write the columns
-            f.write('servers;time;tries\n')
+            f.write('servers;time;tries;runs\n')
 
     def cleanup(self, debug=False):
         TestFramework.cleanup(self, debug=debug)
@@ -79,16 +79,17 @@ class ReconfigureTest(TestFramework):
             )
         )
 
-    def reconfigure_test(self, tries):
+    def reconfigure_test(self, tries, run):
         start_time = time.time()
         self.membership_changes(tries)
         end_time = time.time()
 
         with open("%s" % (self.csv_file), 'a') as f:
-            f.write('%d;%f;%d\n' % (
+            f.write('%d;%f;%d;%d\n' % (
                 len(self.server_ids_ips),
                 end_time - start_time,
-                tries)
+                tries,
+                run)
             )
 
     def plot(self):
@@ -99,7 +100,8 @@ def run_test(
         server_command,
         reconf_opts,
         tries_range,
-        debug = False
+        debug = False,
+        runs=5
     ):
     test = ReconfigureTest()
 
@@ -109,19 +111,23 @@ def run_test(
     test._initialize_first_server(server_command)
     test._start_servers(server_command)
 
-    for tries in tries_range:
+    for run in range(runs):
         print("\n=======================================")
-        print("Running ReconfigureTest with tries: %d" % tries)
+        print("run: %d" % run)
         print("=======================================")
-
-        for servers_num in range(len(test.parent_server_ids_ips), 1, -1):
+        for tries in tries_range:
             print("\n=======================================")
-            print("Running ReconfigureTest with servers: %d" % servers_num)
+            print("Running ReconfigureTest with tries: %d" % tries)
             print("=======================================")
 
-            test.set_servers_num(servers_num, server_command)
-            test._reconfigure_cluster(reconf_opts)
-            test.reconfigure_test(tries)
+            for servers_num in range(len(test.parent_server_ids_ips), 1, -1):
+                print("\n=======================================")
+                print("Running ReconfigureTest with servers: %d" % servers_num)
+                print("=======================================")
+
+                test.set_servers_num(servers_num, server_command)
+                test._reconfigure_cluster(reconf_opts)
+                test.reconfigure_test(tries, run)
 
     test.plot()
     test.cleanup(debug=debug)
@@ -141,7 +147,7 @@ def main():
     run_test(
         server_command = server_command,
         reconf_opts = reconf_opts,
-        tries_range = [10, 100, 1000],
+        tries_range = [10, 100, 250, 500],
         debug = True
     )
 

@@ -15,31 +15,36 @@ class PlotReconfigure(PlotWithPython3):
         self.fig_name = '%s%s' % (fig_name, curr_time)
     
     def plot_stats(self):
-        # Parse columns of the CSV file
-        servers = self.data['servers']
-        time = self.data['time']
-        tries = self.data['tries']
+        # Group data
+        grouped_data = self.data.groupby(['servers', 'tries'])['time']
+        grouped_data = grouped_data.agg(['mean', 'std']).reset_index()
 
         fig, ax = self.plt.subplots()
 
-        # Lengths of unique elements
-        servers_len = len(set(servers))
-        tries_len = len(set(tries))
+        for tries_val in grouped_data['tries'].unique():
+            # Filter data
+            data = grouped_data[grouped_data['tries'] == tries_val]
 
-        for i in range(0, tries_len):
-            start = i * servers_len
-            end = (i+1) * servers_len
+            # Parse data
+            servers = data['servers']
+            time_mean = data['mean']
+            time_std = data['std']
 
-            label = '%d tries' % tries[start] if tries[start] > 1 else '1 try'
+            label = '%d tries' % tries_val if tries_val > 1 else '1 try'
 
             # Plot Sample RTT
-            ax.plot(
-                time[start:end],
-                servers[start:end],
-                label=label
+            ax.errorbar(
+                servers,
+                time_mean,
+                yerr=time_std,
+                label=label,
+                capsize=4,
+                linewidth=1.5,
+                marker='o',
+                markersize=4,
             )
 
-        self.decorate_axis(ax, 'Time (s)', 'Servers')
+        self.decorate_axis(ax, 'Servers', 'Time (s)')
         self.decorate_figure(fig)
 
         fig.savefig('%s%s.pdf' % (self.figures_dir, self.fig_name), backend='pgf')
