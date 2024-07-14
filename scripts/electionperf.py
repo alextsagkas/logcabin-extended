@@ -40,8 +40,10 @@ class ElectionTest(TestFramework):
     # The value 500 ms is suggested by the creators
     def __init__(self, electionTimeoutMilliseconds=500):
         # Initialize the parent class
-        # TestFramework.__init__(self, electionTimeoutMilliseconds)
-        TestFramework.__init__(self)
+        TestFramework.__init__(
+            self,
+            electionTimeoutMilliseconds=electionTimeoutMilliseconds
+        )
 
         # Assign an experiment id
         self.experiment_id = ElectionTest.experiment_id
@@ -114,6 +116,7 @@ class ElectionTest(TestFramework):
 
         ElectionTest.experiment_metadata[self.experiment_id]["elections"] = repeat
         ElectionTest.experiment_metadata[self.experiment_id]["duration"] = []
+        ElectionTest.experiment_metadata[self.experiment_id]["terms"] = []
 
         for i in range(repeat):
             old = self._await_stable_leader()
@@ -129,8 +132,11 @@ class ElectionTest(TestFramework):
 
             self.sandbox.checkFailures()
 
-            num_terms.append(new['term'] - old['term'])
-            print('Took %d terms to elect a new leader' % (new['term'] - old['term']))
+            term_interval = new['term'] - old['term']
+            num_terms.append(term_interval)
+            print('Took %d terms to elect a new leader' % (term_interval))
+            ElectionTest.experiment_metadata[self.experiment_id]["terms"].append(term_interval)
+
             num_woken.append(new['num_woken'])
             print('%d servers woke up' % (new['num_woken']))
 
@@ -151,18 +157,20 @@ class ElectionTest(TestFramework):
     @staticmethod
     def _write_csv():
         with open("%s" % ElectionTest.csv_file, 'w') as f:
-            f.write("elections;time;electionTimeout\n")
+            f.write("elections;time;electionTimeout;terms\n")
 
             for _, metadata in ElectionTest.experiment_metadata.items():
                 elections = metadata["elections"]
                 duration = metadata["duration"]
                 electionTimeout = metadata["electionTimeout"]
+                terms = metadata["terms"]
 
-                for time in duration:
-                    f.write('%d;%f;%.2f\n' % (
+                for time, term in zip(duration, terms):
+                    f.write('%d;%f;%.2f;%d\n' % (
                         elections,
                         time,
-                        electionTimeout)
+                        electionTimeout,
+                        term)
                     )
 
     @staticmethod
@@ -198,7 +206,7 @@ def run_experiments(electionTimeouts):
         test.cleanup(debug=True)
 
 def main():
-    electionTimeouts = [1000, 500, 200, 10]
+    electionTimeouts = [500, 250, 100, 50, 10]
 
     run_experiments(
         electionTimeouts=electionTimeouts,
