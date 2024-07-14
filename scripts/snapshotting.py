@@ -72,9 +72,10 @@ class SnapshotTest(TestFramework):
                 onCluster = False,
             )
 
-    def executeBenchmark(self, size, writes):
+    def executeBenchmark(self, size, writes, run):
         SnapshotTest.stats[SnapshotTest.experiment_number]["size"] = size
         SnapshotTest.stats[SnapshotTest.experiment_number]["writes"] = writes
+        SnapshotTest.stats[SnapshotTest.experiment_number]["run"] = run
 
         start_time = time.time()
 
@@ -129,6 +130,7 @@ def run_test(
     snapshotting,
     size,
     writes,
+    run
 ):
     snapshotTest = SnapshotTest(
         snapshotMinLogSize = 1024,
@@ -148,7 +150,7 @@ def run_test(
     else:
         snapshotTest.disallowSnapshotting()
 
-    snapshotTest.executeBenchmark(size, writes)
+    snapshotTest.executeBenchmark(size, writes, run)
 
     snapshotTest.dumpStats()
     snapshotTest.printStats()
@@ -194,23 +196,29 @@ def execute_experiment(
     reconf_opts,
     size_array,
     writes_array,
+    runs=5
 ):
 
-    for size in size_array:
-        for writes in writes_array:
-            for snapshotting in [True, False]:
-                print("\n\n=============================================")
-                print("size: %d, writes: %d, snapshotting: %s" % (size, writes, snapshotting))
-                print("=============================================\n\n")
+    for run in range(runs):
+        print("\n\n=============================================")
+        print("Run %d" % run)
+        print("=============================================\n\n")
+        for size in size_array:
+            for writes in writes_array:
+                for snapshotting in [True, False]:
+                    print("\n\n=============================================")
+                    print("size: %d, writes: %d, snapshotting: %s" % (size, writes, snapshotting))
+                    print("=============================================\n\n")
 
-                # Run the test
-                run_test(
-                    server_command,
-                    reconf_opts,
-                    snapshotting,
-                    size,
-                    writes,
-                )
+                    # Run the test
+                    run_test(
+                        server_command,
+                        reconf_opts,
+                        snapshotting,
+                        size,
+                        writes,
+                        run
+                    )
     
     write_csv(
         file = SnapshotTest.csv_file,

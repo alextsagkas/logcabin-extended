@@ -15,18 +15,23 @@ class PlotSnapshotting(PlotWithPython3):
         self.fig_name = '%s%s' % (fig_name, curr_time)
     
     def plot_stats(self):
-        snapshotting = self.data['snapshotting']
+        # Group data
+        grouped_data = self.data.groupby(['writes', 'size', 'snapshotting'])['time']
+
+        # Calculate mean and standard deviation of the time
+        grouped_data = grouped_data.agg(['mean', 'std']).reset_index()
 
         fig, ax = self.plt.subplots()
 
-        for snapshotting_value in snapshotting.unique():
+        for snapshotting_value in grouped_data['snapshotting'].unique():
             # Filter data
-            data = self.data[self.data['snapshotting'] == snapshotting_value]
+            data = grouped_data[grouped_data['snapshotting'] == snapshotting_value]
 
             # Parse data
             writes = data['writes']
-            time = data['time']
             size = data['size']
+            time_mean = data['mean']
+            time_std = data['std']
 
             # Caclulate the total size of written data to the log
             kilo_byte = 1024
@@ -36,16 +41,18 @@ class PlotSnapshotting(PlotWithPython3):
             label = "Snapshotting" if snapshotting_value else "Bare-Bones"
 
             # Scatter plot
-            ax.plot(
-                time,
+            ax.errorbar(
+                time_mean,
                 writes,
+                xerr=time_std,
+                capsize=4,
                 label=label,
                 linewidth=1.5,
                 marker='o',
                 markersize=4,
             )
 
-        self.decorate_axis(ax, 'Time (ms)', 'Total Size (KB)')
+        self.decorate_axis(ax, 'Time (s)', 'Total Size (KB)')
         self.decorate_figure(fig)
 
         fig.savefig('%s%s.pdf' % (self.figures_dir, self.fig_name), backend='pgf')
