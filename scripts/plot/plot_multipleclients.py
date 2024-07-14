@@ -18,7 +18,6 @@ class PlotMultipleClients(PlotWithPython3):
     def plot_stats(self):
         # Group data
         grouped_data = self.data.groupby(['threads', 'servers'])['throughput']
-        print(self.data)
 
         # Calculate mean and standard deviation of the throughput
         grouped_data = grouped_data.agg(['mean', 'std']).reset_index()
