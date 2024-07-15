@@ -46,7 +46,7 @@ class FailoverTest(TestFramework):
         self.csv_file = "scripts/plot/csv/failover.csv"
         self.plot_file = "scripts/plot/plot_failover.py"
     
-    def run_failovertest(self, writes):
+    def run_failovertest(self, writes, run):
 
         client_process = self.execute_client_command(
             client_executable = 'build/Examples/FailoverTest',
@@ -62,6 +62,7 @@ class FailoverTest(TestFramework):
         self.experiment_metadata[self.client_commands] = {} # initialize
         self.experiment_metadata[self.client_commands]["start_time"] = time.time()
         self.experiment_metadata[self.client_commands]["writes"] = writes
+        self.experiment_metadata[self.client_commands]["run"] = run
 
         return client_process
 
@@ -119,14 +120,15 @@ class FailoverTest(TestFramework):
 
     def _write_csv(self):
         with open("%s" % self.csv_file, 'w') as f:
-            f.write("time;writes;killinterval;launchdelay\n")
+            f.write("time;writes;killinterval;launchdelay;run\n")
 
             for _, metadata in self.experiment_metadata.items():
-                f.write('%f;%d;%d;%d\n' % (
+                f.write('%f;%d;%d;%d;%d\n' % (
                     metadata["end_time"] - metadata["start_time"],
                     int(metadata["writes"]),
                     metadata["kill_interval"],
-                    metadata["launch_delay"])
+                    metadata["launch_delay"],
+                    metadata["run"])
                 )
 
     def plot(self):
@@ -148,6 +150,7 @@ def main():
     if reconf_opts == "''":
         reconf_opts = ""
 
+    runs = 5
     writes_array = [512, 1024, 2048]
 
     killintervals = [4, 4, 4, 6, 6, 6, 8, 8, 8]
@@ -161,18 +164,19 @@ def main():
 
     test.initialize_cluster(server_command, reconf_opts)
 
-    for writes in writes_array:
-        for killinterval, launchdelay in zip(killintervals, launchdelays):
-            print("\n============================================")
-            print("writes: %d, killinterval: %d, launchdelay: %d" % (
-                writes,
-                killinterval,
-                launchdelay)
-            )
-            print("============================================")
+    for run in range(runs):
+        for writes in writes_array:
+            for killinterval, launchdelay in zip(killintervals, launchdelays):
+                print("\n============================================")
+                print("writes: %d, killinterval: %d, launchdelay: %d" % (
+                    writes,
+                    killinterval,
+                    launchdelay)
+                )
+                print("============================================")
 
-            process = test.run_failovertest(writes)
-            test.random_server_kill(process, server_command, killinterval, launchdelay)
+                process = test.run_failovertest(writes, run)
+                test.random_server_kill(process, server_command, killinterval, launchdelay)
 
     test.plot()
     test.cleanup()

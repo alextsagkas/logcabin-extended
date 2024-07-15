@@ -66,11 +66,16 @@ class PlotFailover(PlotWithPython3):
         fig.set_size_inches(self.fig_size)
 
     def plot_stats(self):
+        # Grouped data
+        grouped_data = self.data.groupby(['writes', 'killinterval', 'launchdelay']).agg({
+            "time": 'mean',
+        }).reset_index()
+
         # Parse data
-        time = self.data['time']
-        writes = self.data['writes']
-        killinterval = self.data['killinterval']
-        launchdelay = self.data['launchdelay']
+        time = grouped_data['time']
+        writes = grouped_data['writes']
+        killinterval = grouped_data['killinterval']
+        launchdelay = grouped_data['launchdelay']
 
         # Create axis and figure
         fig, ax = self.plt.subplots(layout="constrained")
